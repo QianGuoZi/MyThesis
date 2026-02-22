@@ -153,8 +153,7 @@ L_t = w_1 L_t^{\text{CPU}} + w_2 L_t^{\text{RAM}} + w_3 L_t^{\text{BW}}, \quad w
             \For{each $j$ in sorted $C$}
                 \State $success \gets \text{TryMapJob}(j)$  \Comment{调用单作业调度器}
                 \If{$success$}
-                    \State 将 $j$ 从 $\mathcal{Q}_{\text{wait}}$ 移至 $\mathcal{Q}_{\text{run}}$，更新资源状态
-                    \State 重置 $j$ 的跳过计数 $\text{skip}(j) \gets 0$
+                    \State 将 $j$ 从 $\mathcal{Q}_{\text{wait}}$ 移至 $\mathcal{Q}_{\text{run}}$，更新资源状态。然后重置 $j$ 的跳过计数 $\text{skip}(j) \gets 0$
                     \State \textbf{break} 
                 \Else
                     \State $\text{skip}(j) \gets \text{skip}(j) + 1$
@@ -252,9 +251,9 @@ L_t = w_1 L_t^{\text{CPU}} + w_2 L_t^{\text{RAM}} + w_3 L_t^{\text{BW}}, \quad w
 为评估本文提出的 CES-Multi-Job 调度算法的性能，我们选取四种具有代表性的调度策略作为对比基线，涵盖基于优先级的简单策略、经典作业调度策略以及源自现有研究的启发式方法。各对比算法的核心思想及其在本文仿真环境中的简化实现方式如下：
 
 \begin{itemize}
-    \item \textbf{SWTS}：每个作业的综合得分由以下四个因素加权组合：关键路径长度（CPL，与作业预计运行时间成反比）、任务并行度（TPS，与任务节点数 $K_j$ 正相关）、数据局部性评分（DLS，与总带宽需求 $\sum b_v^{\min}$ 成反比）以及资源匹配度（计算节点资源与任务需求的匹配程度）。此外，作业的优先级 $w_j$ 也被纳入评分体系。每次调度时，选择综合得分最高的作业进行映射。
+    \item \textbf{SWTS}\cite{SWTS}：每个作业的综合得分由以下四个因素加权组合：关键路径长度（CPL，与作业预计运行时间成反比）、任务并行度（TPS，与任务节点数 $K_j$ 正相关）、数据局部性评分（DLS，与总带宽需求 $\sum b_v^{\min}$ 成反比）以及资源匹配度（计算节点资源与任务需求的匹配程度）。此外，作业的优先级 $w_j$ 也被纳入评分体系。每次调度时，选择综合得分最高的作业进行映射。
 
-    \item \textbf{AdaEvo}：首先，结合作业的优先级和等待时间计算紧急度，然后根据紧急度将等待队列中的作业划分为 $K$ 组（等数量分组），并从紧急度最高的组内选取作业。组内评分综合考虑资源匹配度、CPL、TPS 和优先级，并以该组的紧急度加权，最终选择得分最高的作业进行调度。
+    \item \textbf{AdaEvo}\cite{AdaEvo}：首先，结合作业的优先级和等待时间计算紧急度，然后根据紧急度将等待队列中的作业划分为 $K$ 组（等数量分组），并从紧急度最高的组内选取作业。组内评分综合考虑资源匹配度、CPL、TPS 和优先级，并以该组的紧急度加权，最终选择得分最高的作业进行调度。
     
     \item \textbf{FIFO（先入先出）}：最基础的调度策略，严格按照作业到达顺序进行调度。每次调度周期中，直接选择等待队列中等待时间最长的作业尝试映射，不涉及任何评分或资源匹配计算。
 
