@@ -1,11 +1,11 @@
 \chapter{多任务队列调度算法}
-针对协同边缘计算环境中多分布式学习作业的在线调度问题，本文提出一种融合滚动窗口、资源感知贪心排序与动态饥饿保护的混合启发式调度算法。该算法在CPU、内存、链路带宽等多维资源约束下，联合优化带宽满足度、系统负载均衡度与作业平均等待时间三个相互冲突的指标。首先，基于系统负载动态确定候选作业窗口，平衡决策复杂度与调度机会；其次，通过资源适配度、业务优先级与等待因子计算综合评分，优先调度与剩余资源最匹配的作业；最后，引入跳过计数阈值与强制预留机制防止低优先级作业饥饿。本文详细给出了问题形式化模型、算法伪代码与复杂度分析，并设计了完整的仿真实验方案，包括物理拓扑生成、作业到达过程、对比算法与多维度评估指标，为后续实现与性能验证奠定理论基础。
+针对协同边缘计算环境中多分布式学习作业的在线调度问题，本章提出一种融合滚动窗口、资源感知贪心排序与动态饥饿保护的混合启发式调度算法。该算法在CPU、内存、链路带宽等多维资源约束下，联合优化带宽满足度、系统负载均衡度与作业平均等待时间三个相互冲突的指标。首先，基于系统负载动态确定候选作业窗口，平衡决策复杂度与调度机会；其次，通过资源适配度、业务优先级与等待因子计算综合评分，优先调度与剩余资源最匹配的作业；然后，引入跳过计数阈值与强制预留机制防止低优先级作业饥饿。在本章的最后，我们通过仿真实验验证算法在不同环境下的性能优势，并与多种基线调度策略进行对比分析。该算法在CES单作业调度器上进行了多作业的拓展，具有良好的可扩展性与实用性。
 \section{问题建模}
 随着深度学习模型在边缘智能场景中的广泛应用，越来越多的分布式学习作业需要部署在资源受限的边缘节点上。这些作业通常包含多个协同计算的任务节点及任务间的通信链路，对计算资源（CPU、内存）与网络资源（带宽）均有需求。如何在满足物理资源约束的前提下，高效、公平地调度多批作业，已成为边缘计算资源管理领域的关键挑战。
 
-现有研究往往将作业调度分解为两个独立阶段：先决定作业的执行顺序，再为单个作业分配计算节点与带宽资源。这种分阶段方法容易造成目标冲突——例如，仅按优先级排序可能忽略资源匹配度，导致资源碎片化；仅按资源需求大小排序则可能使大作业长期阻塞小作业。此外，多数调度器未显式考虑作业间的带宽竞争，或仅以最小带宽保障为目标，难以逼近最大带宽需求。
+现有研究往往将作业调度分解为两个独立阶段：先决定作业的执行顺序，再为单个作业分配计算节点与带宽资源。这种分阶段方法容易造成目标冲突——例如，仅按优先级排序可能忽略资源匹配度，导致资源碎片化；仅按资源需求大小排序则可能使大作业长期阻塞小作业。此外，多数调度器未显式考虑作业间的带宽竞争，或仅以最小带宽保障为目标，难以逼近最大带宽需求。因此，我们在第四章提出的单作业调度算法基础上，设计了一种全新的多作业在线调度算法，旨在同时优化带宽满足度、负载均衡度与平均等待时间三个核心指标。
 
-为解决上述问题，本文提出一种\textbf{多作业队列在线调度算法}（Multi-Job Online Scheduling, MJOS），其核心创新包括：
+为解决上述问题，本文提出一种多作业队列在线调度算法CES-Multi-Job，其核心内容包括：
 
 \begin{itemize}
     \item \textbf{联合调度框架}：将计算资源与网络资源统一纳入调度决策，避免分阶段优化的次优性；
@@ -14,31 +14,19 @@
     \item \textbf{饥饿保护机制}：通过跳过计数与等待时间监控，对长期未获调度的作业实施优先级提升或强制资源预留，保障公平性。
 \end{itemize}
 
-本文所述算法与现有的单作业调度器（如基于强化学习的PPO分配器）完全兼容，可作为上层调度器集成至CES（Collaborative Edge System）等边缘计算平台。下文将详细介绍问题建模、算法设计及复杂度分析。
+本文所述算法与现有的单作业调度算法（如第四章中的基于强化学习的PPO调度算法）完全兼容，可作为上层调度器集成至CES等边缘计算平台。
 
 \subsection{系统模型}
 
-考虑一个协同边缘计算系统，包含一个中心调度器及若干边缘节点。系统维护两个队列：\textbf{等待调度队列} $\mathcal{Q}_{\text{wait}}$ 存放已到达但尚未获得资源的作业；\textbf{运行队列} $\mathcal{Q}_{\text{run}}$ 存放正在执行的作业。调度器在每个离散时间步 $t$ 观察系统状态，从 $\mathcal{Q}_{\text{wait}}$ 中选择若干作业尝试分配资源，成功则移入 $\mathcal{Q}_{\text{run}}$。
+考虑一个协同边缘计算系统，包含一个中心调度器及若干边缘节点。系统维护两个队列：等待调度队列 ${Q}_{\text{wait}}$ 存放已到达但尚未获得资源的作业；运行队列 ${Q}_{\text{run}}$ 存放正在执行的作业。调度器在每个离散时间步 $t$ 观察系统状态，从 ${Q}_{\text{wait}}$ 中选择若干作业尝试分配资源，成功则移入 ${Q}_{\text{run}}$。每个作业 $j$ 包含一个任务节点集合 ${N}_j$ 和一个通信链路集合 ${V}_j$，分别描述作业内部的计算与通信需求。调度器需在满足物理资源约束的前提下，为每个任务节点分配一个物理节点，并为每条虚拟链路分配物理链路上的带宽资源。
 
 \subsubsection{物理网络资源}
-\begin{itemize}
-    \item 物理节点集合：$\mathcal{P} = \{p_1, p_2, \dots, p_M\}$，$M = |\mathcal{P}|$。
-    \item 物理链路集合：$\mathcal{R} = \{r_1, r_2, \dots, r_L\}$，$L = |\mathcal{R}|$。链路为双向，带宽对称。
-    \item 节点 $p$ 的总资源：$C_p^{\text{CPU}}$（CPU核数或单位），$R_p^{\text{RAM}}$（内存大小）。运行中占用资源为已分配给运行作业任务的部分，剩余空闲资源记为 $A_p^{\text{CPU}}(t)$、$A_p^{\text{RAM}}(t)$。
-    \item 链路 $r$ 的总带宽：$B_r^{\text{total}}$。已分配带宽记为 $U_r(t)$，剩余带宽 $A_r^{\text{BW}}(t) = B_r^{\text{total}} - U_r(t)$。
-\end{itemize}
+
+本节定义物理网络资源的描述方式。物理网络由节点和链路构成，分别以集合 ${P} = \{p_1, p_2, \dots, p_M\}$ 和 ${R} = \{r_1, r_2, \dots, r_L\}$ 表示，其中 $M = |{P}|$ 为节点总数，$L = |{R}|$ 为链路总数。所有物理链路均为双向传输，且上下行带宽可不对称。对于任意物理节点 $p \in P$，其可用计算资源包括 CPU 核心数和内存容量，分别记为 $C_p^{\text{CPU}}$ 和 $R_p^{\text{RAM}}$。在系统运行过程中，部分资源已被分配给当前正在执行的作业任务，因此节点的剩余空闲资源随时间动态变化，分别用 $A_p^{\text{CPU}}(t)$ 和 $A_p^{\text{RAM}}(t)$ 表示时刻 $t$ 的剩余 CPU 核数和内存大小。类似地，对于任意物理链路 $r \in R$，其总带宽记为 $BW_r^{\text{total}}$，已分配带宽为 $U_r(t)$，则时刻 $t$ 的剩余带宽为 $A_r^{\text{BW}}(t) = BW_r^{\text{total}} - U_r(t)$。
 
 \subsubsection{作业模型}
 
-每个作业 $j \in \mathcal{J}$ 具有以下属性：
-\begin{itemize}
-    \item 任务节点集 $\mathcal{N}_j = \{n_{j1}, \dots, n_{jK_j}\}$，$K_j = |\mathcal{N}_j|$。
-    \item 通信链路集 $\mathcal{V}_j = \{v_{j1}, \dots, v_{jE_j}\}$，$E_j = |\mathcal{V}_j|$，每条链路连接两个任务节点。
-    \item 任务节点 $n$ 的资源需求：$\text{CPU}^N(n)$，$\text{RAM}^N(n)$。实际映射时，每个任务需独占式分配完整需求。
-    \item 通信链路 $v$ 的带宽需求区间：$[b_v^{\min}, b_v^{\max}]$，调度器应至少分配 $b_v^{\min}$，并尽可能接近 $b_v^{\max}$。
-    \item 优先级权重 $w_j \in [1,5]$，整数，数值越大表示业务紧急程度越高。
-    \item 到达时间 $t_j^{\text{arr}}$；开始时间 $t_j^{\text{start}}$；等待时间 $T_j^{\text{wait}} = t_j^{\text{start}} - t_j^{\text{arr}}$（若尚未开始，则为 $t - t_j^{\text{arr}}$）。
-\end{itemize}
+每个作业 $j \in {J}$ 具有一系列属性，用于刻画其资源需求和执行特性。作业 $j$ 包含一个任务节点集合 ${N}_j = \{n_{j1}, \dots, n_{jK_j}\}$，其中 $K_j = |{N}_j|$ 表示该作业包含的任务数量。任务节点之间通过通信链路相连，构成作业内部的通信拓扑，记链路集合为 ${V}_j = \{v_{j1}, \dots, v_{jE_j}\}$，$E_j = |{V}_j|$ 为链路数量，每条链路连接两个不同的任务节点。对于每个任务节点 $n \in N_j$，其资源需求由 CPU 核数 $\text{CPU}^N(n)$ 和内存大小 $\text{RAM}^N(n)$ 描述。在实际部署时，每个任务必须独占式地分配满足其需求的完整资源量。对于每条通信链路 $v \in V_j$，其带宽需求为一个区间 $[b_v^{\min}, b_v^{\max}]$，调度器必须至少分配 $b_v^{\min}$ 的带宽以保证基本通信性能，同时应尽可能接近 $b_v^{\max}$ 以提升作业执行效率。此外，每个作业 $j$ 具有优先级权重 $w_j \in [1,5]$（整数），数值越大表示业务紧急程度越高。作业的到达时间记为 $t_j^{\text{arr}}$，实际开始执行时间为 $t_j^{\text{start}}$，由此可定义其等待时间 $T_j^{\text{wait}} = t_j^{\text{start}} - t_j^{\text{arr}}$。若作业尚未开始执行，则当前等待时间表示为 $t - t_j^{\text{arr}}$，其中 $t$ 为当前时刻。这些属性共同构成了作业调度的输入信息，后续的调度决策需在满足物理资源约束的前提下，综合考虑作业优先级、等待时间及带宽分配的优化目标。
 
 \subsubsection{映射与资源分配约束}
 
@@ -47,19 +35,19 @@
 \begin{enumerate}
     \item \textbf{节点资源约束}（任一时刻 $t$）：
     \begin{align}
-        &\forall p \in \mathcal{P}: \sum_{j \in \mathcal{Q}_{\text{run}}(t)} \sum_{n \in \mathcal{N}_j} X_{p}^{n}(j) \cdot \text{CPU}^N(n) \le C_p^{\text{CPU}}, \\
-        &\forall p \in \mathcal{P}: \sum_{j \in \mathcal{Q}_{\text{run}}(t)} \sum_{n \in \mathcal{N}_j} X_{p}^{n}(j) \cdot \text{RAM}^N(n) \le R_p^{\text{RAM}}.
+        &\forall p \in {P}: \sum_{j \in {Q}_{\text{run}}(t)} \sum_{n \in {N}_j} X_{p}^{n}(j) \cdot \text{CPU}^N(n) \le C_p^{\text{CPU}}, \\
+        &\forall p \in {P}: \sum_{j \in {Q}_{\text{run}}(t)} \sum_{n \in {N}_j} X_{p}^{n}(j) \cdot \text{RAM}^N(n) \le R_p^{\text{RAM}}.
     \end{align}
     
     \item \textbf{链路带宽约束}（任一时刻 $t$）：
     \begin{equation}
-        \forall r \in \mathcal{R}: \sum_{j \in \mathcal{Q}_{\text{run}}(t)} \sum_{v \in \mathcal{V}_j} Y_{r}^{v}(j) \cdot b_v^{\text{alloc}} \le B_r^{\text{total}},
+        \forall r \in {R}: \sum_{j \in {Q}_{\text{run}}(t)} \sum_{v \in {V}_j} Y_{r}^{v}(j) \cdot B_v^{\text{alloc}} \le BW_r^{\text{total}},
     \end{equation}
-    其中 $b_v^{\text{alloc}} \in [b_v^{\min}, b_v^{\max}]$ 为实际分配给链路 $v$ 的带宽。
+    其中 $B_v^{\text{alloc}} \in [BW_v^{\min}, BW_v^{\max}]$ 为实际分配给链路 $v$ 的带宽。
     
     \item \textbf{任务映射唯一性}：
     \begin{equation}
-        \forall j, \forall n \in \mathcal{N}_j: \sum_{p \in \mathcal{P}} X_{p}^{n}(j) = 1.
+        \forall j, \forall n \in {N}_j: \sum_{p \in {P}} X_{p}^{n}(j) = 1.
     \end{equation}
     
     \item \textbf{链路路径约束}：若任务 $n_i$ 映射至 $p_a$，任务 $n_k$ 映射至 $p_b$，且虚拟链路 $v = (n_i, n_k)$，则 $Y_{r}^{v}(j)=1$ 当且仅当物理链路 $r$ 位于从 $p_a$ 到 $p_b$ 的最短路径上。本文假设采用静态最短路径路由。
@@ -69,98 +57,111 @@
 
 \subsection{性能指标}
 
-为量化调度质量，定义三个核心指标，分别对应带宽、负载均衡与延迟。
+为量化调度质量，定义三个核心指标，分别为带宽带满足度、负载均衡与作业平均等待时间。
 
 \subsubsection{带宽需求满足度}
 
 对于运行中的作业 $j$，定义其带宽满足度为所有虚拟链路实际分配带宽与最大需求比值的平均值：
 \begin{equation}
-    D_{\text{BW}}(j) = \frac{1}{|\mathcal{V}_j|} \sum_{v \in \mathcal{V}_j} \frac{b_v^{\text{alloc}}}{b_v^{\max}}.
+    D_{\text{BW}}(j) = \frac{1}{|\mathcal{V}_j|} \sum_{v \in \mathcal{V}_j} \frac{B_v^{\text{alloc}}}{BW_v^{\max}}.
 \end{equation}
 若作业所有任务映射至同一节点（无通信），则定义 $D_{\text{BW}}(j) = 1$。系统整体带宽满足度为运行队列中作业的平均值：
 \begin{equation}
-    \bar{D}_{\text{BW}}(t) = \frac{1}{|\mathcal{Q}_{\text{run}}(t)|} \sum_{j \in \mathcal{Q}_{\text{run}}(t)} D_{\text{BW}}(j).
+    \bar{D}_{\text{BW}}(t) = \frac{1}{|{Q}_{\text{run}}(t)|} \sum_{j \in {Q}_{\text{run}}(t)} D_{\text{BW}}(j).
 \end{equation}
 
 \subsubsection{系统负载均衡度}
-
-负载均衡度衡量三类资源在物理节点/链路上的利用分布均匀性。首先计算节点 $p$ 的CPU利用率 $\rho_p^{\text{CPU}}(t) = 1 - A_p^{\text{CPU}}(t)/C_p^{\text{CPU}}$，内存利用率 $\rho_p^{\text{RAM}}(t)$ 类似。链路 $r$ 的带宽利用率 $\rho_r^{\text{BW}}(t) = U_r(t)/B_r^{\text{total}}$。
-
-定义资源 $x$（CPU、RAM、BW）的\textbf{不均衡系数}为各实体利用率的变异系数（标准差/均值）：
+负载均衡度是衡量系统资源利用均匀性的重要指标，本文分别从节点和链路两个维度，考察CPU、内存和带宽三类资源的利用分布情况。首先，定义物理节点 $p$ 在时刻 $t$ 的CPU利用率为其已占用资源与总资源的比值：
 \begin{equation}
-    L_t^{x} = \frac{\sqrt{\frac{1}{M_x} \sum_{i=1}^{M_x} (\rho_i^x - \bar{\rho}^x)^2}}{\bar{\rho}^x + \epsilon},
+\rho_p^{\text{CPU}}(t) = 1 - \frac{A_p^{\text{CPU}}(t)}{C_p^{\text{CPU}}},
 \end{equation}
-其中 $M_x$ 为对应实体数量（节点数或链路数），$\epsilon$ 避免除零。整体负载均衡度加权组合：
+其中 $A_p^{\text{CPU}}(t)$ 为剩余CPU核数，$C_p^{\text{CPU}}$ 为总CPU核数。
+
+类似地，内存利用率定义为：
 \begin{equation}
-    L_t = w_1 L_t^{\text{CPU}} + w_2 L_t^{\text{RAM}} + w_3 L_t^{\text{BW}}, \quad w_1+w_2+w_3=1.
+\rho_p^{\text{RAM}}(t) = 1 - \frac{A_p^{\text{RAM}}(t)}{R_p^{\text{RAM}}}.
 \end{equation}
-本文取默认权重 $(0.4,0.4,0.2)$。$L_t$ 越小表示资源利用越均衡。
+对于物理链路 $r$，其带宽利用率则为已分配带宽占总带宽的比例：
+\begin{equation}
+\rho_r^{\text{BW}}(t) = \frac{U_r(t)}{BW_r^{\text{total}}},
+\end{equation}
+其中 $U_r(t)$ 为时刻 $t$ 已分配的带宽，$BW_r^{\text{total}}$ 为链路总带宽。
+
+为了量化每类资源在不同实体（节点或链路）上利用率的离散程度，引入不均衡系数，采用变异系数（标准差与均值的比值）进行度量。设某类资源 $x \in \{\text{CPU}, \text{RAM}, \text{BW}\}$ 对应的实体数量为 $M_x$（对于CPU和内存，$M_x = |P|$；对于带宽，$M_x = |R|$），利用率的均值为：
+\begin{equation}
+\bar{\rho}^x = \frac{1}{M_x} \sum_{i=1}^{M_x} \rho_i^x.
+\end{equation}
+则资源 $x$ 的不均衡系数定义为：
+\begin{equation}
+L_t^{x} = \frac{\sqrt{\frac{1}{M_x} \sum_{i=1}^{M_x} (\rho_i^x - \bar{\rho}^x)^2}}{\bar{\rho}^x + \epsilon},
+\end{equation}
+其中分子为标准差，分母添加一个极小正数 $\epsilon$（如 $10^{-6}$）以避免除零情形。该系数反映了该类资源利用率的波动程度：系数越大，表示不同实体间的利用率差异越明显，即负载分布越不均衡。
+
+为综合评估整体系统的负载均衡程度，对三类资源的不均衡系数进行加权组合，得到整体负载均衡度：
+\begin{equation}
+L_t = w_1 L_t^{\text{CPU}} + w_2 L_t^{\text{RAM}} + w_3 L_t^{\text{BW}}, \quad w_1 + w_2 + w_3 = 1.
+\end{equation}
+权重反映了不同资源在均衡性评价中的重要性，可根据实际场景调整。本文默认取 $w_1 = 0.4$，$w_2 = 0.4$，$w_3 = 0.2$，即优先考虑计算资源的均衡性，同时兼顾网络带宽的分布。$L_t$ 的值越小，表明系统整体资源利用越均匀，负载均衡性越好。该指标将在后续调度决策中作为优化目标之一，引导调度器合理分配任务和通信资源，避免局部热点。
 
 \subsubsection{作业平均等待时间}
 
 在时刻 $t$，所有\textbf{已到达}作业的平均等待时间：
 \begin{equation}
-    \bar{T}_{\text{wait}}(t) = \frac{1}{|\mathcal{Q}_{\text{wait}}(t) \cup \mathcal{Q}_{\text{run}}(t)|} \sum_{j \in \mathcal{Q}_{\text{wait}} \cup \mathcal{Q}_{\text{run}}} (t - t_j^{\text{arr}}).
+    \bar{T}_{\text{wait}}(t) = \frac{1}{|{Q}_{\text{wait}}(t) \cup {Q}_{\text{run}}(t)|} \sum_{j \in {Q}_{\text{wait}} \cup {Q}_{\text{run}}} (t - t_j^{\text{arr}}).
 \end{equation}
 对于已完成作业，其等待时间固定为 $t_j^{\text{start}}-t_j^{\text{arr}}$。
 
 \subsection{优化目标}
 
-本文采用\textbf{加权和法}将多目标问题转化为单目标优化。在每个调度时刻 $t$，选择待调度作业子集 $S_t \subseteq \mathcal{Q}_{\text{wait}}(t)$，使得调度后的系统综合性能最大：
+本文采用加权和法将多目标问题转化为单目标优化。在每个调度时刻 $t$，选择待调度作业子集 $S_t \subseteq {Q}_{\text{wait}}(t)$，使得调度后的系统综合性能最大：
 \begin{equation}
     \max_{S_t} \; \alpha_1 \bar{D}_{\text{BW}}(t+|S_t|) + \alpha_2 \left(1 - L_{t+|S_t|}\right) + \alpha_3 \left(1 - \frac{\bar{T}_{\text{wait}}(t+|S_t|)}{T_{\max}}\right),
 \end{equation}
-其中 $\alpha_1=0.5$，$\alpha_2=0.3$，$\alpha_3=0.2$，$T_{\max}$ 为最大容忍等待时间（设为仿真长度或经验值）。约束条件同第\ref{sec:model}节。
+其中 $\alpha_1=0.5$，$\alpha_2=0.3$，$\alpha_3=0.2$，$T_{\max}$ 为最大容忍等待时间（设为仿真长度或经验值）。
 
-由于未来状态依赖于当前调度决策且作业到达随机，精确在线优化极为困难。因此，本文设计一种启发式算法，在每个时刻仅调度\textbf{至多一个}作业（或少量作业），以贪心方式逼近上述目标。
+由于未来状态依赖于当前调度决策且作业到达随机，精确在线优化极为困难。因此，本文设计一种启发式算法，在每个时刻仅调度至多一个作业，以贪心方式逼近上述目标。
 
 \section{算法设计}
 \subsection{总体框架}
-本文提出的\textbf{多作业在线调度算法}（Multi-Job Online Scheduling, MJOS）由四个核心模块构成：
+本文提出的多作业在线调度算法CES-Multi-Job由四个核心模块构成：
 
 \begin{enumerate}
-    \item \textbf{滚动窗口选择}：根据当前系统负载，从 $\mathcal{Q}_{\text{wait}}$ 中选出有限个作业作为候选集 $C$，避免每步遍历整个队列。
+    \item \textbf{滚动窗口选择}：根据当前系统负载，从 ${Q}_{\text{wait}}$ 中选出有限个作业作为候选集 $C$，避免每步遍历整个队列。
     \item \textbf{综合评分计算}：对每个候选作业，计算资源适配度、优先级得分与等待因子，加权得到总评分。
     \item \textbf{贪心调度尝试}：按评分降序依次调用单作业调度器尝试分配资源，成功则更新系统状态并移动作业。
     \item \textbf{饥饿保护}：监控长期未获调度的作业，通过提升优先级或强制预留方式提高其调度机会。
 \end{enumerate}
 
-算法\ref{alg:MJOS}给出了MJOS的顶层伪代码。
-
+算法\ref{alg:CES-Multi-Job}给出了CES-Multi-Job的伪代码。
 \begin{algorithm}[htbp]
-    \caption{多作业在线调度算法（MJOS）}
-    \label{alg:MJOS}
+    \caption{多作业在线调度算法CES-Multi-Job}
+    \label{alg:CES-Multi-Job}
     \begin{algorithmic}[1]
         \Require 等待队列 $\mathcal{Q}_{\text{wait}}$，运行队列 $\mathcal{Q}_{\text{run}}$，物理网络状态 $(\mathcal{P},\mathcal{R})$，参数 $\beta,\tau,\theta,K,T_{\text{th}}$
-        \Ensure 更新后的 $\mathcal{Q}_{\text{wait}}$，$\mathcal{Q}_{\text{run}}$ 及资源状态
         
         \For{每个调度周期}
-            \State // 步骤1：滚动窗口选择
-            \State $W \gets \min\left( \left\lfloor \beta \cdot \dfrac{\sum_{p} A_p^{\text{CPU}}}{ \max_p C_p^{\text{CPU}} } \cdot |\mathcal{P}| \right\rfloor,\; |\mathcal{Q}_{\text{wait}}| \right)$
+            \State $W \gets \min\left( \left\lfloor \beta \cdot \dfrac{\sum_{p} A_p^{\text{CPU}}}{ \max_p C_p^{\text{CPU}} } \cdot |\mathcal{P}| \right\rfloor,\; |\mathcal{Q}_{\text{wait}}| \right)$ \Comment{步骤1：滚动窗口选择}
             \State $C \gets \{j_1, j_2, \dots, j_W\}$，即 $\mathcal{Q}_{\text{wait}}$ 的前 $W$ 个作业（按到达时间排序）
             
-            \State // 步骤2：为每个候选作业计算综合评分
-            \For{each $j \in C$}
-                \State $R_{\text{match}}(j) \gets \text{ComputeResourceMatch}(j)$  \Comment{式(13)}
+            \For{each $j \in C$} \Comment{步骤2：为每个候选作业计算综合评分}
+                \State $R_{\text{match}}(j) \gets \text{ComputeResourceMatch}(j)$  \Comment{式(5-16)}
                 \State $S_{\text{wait}}(j) \gets 1 - \exp\left(-\dfrac{t - t_j^{\text{arr}}}{\tau}\right)$
                 \State $S_{\text{total}}(j) \gets 0.6 \cdot R_{\text{match}}(j) + 0.3 \cdot \dfrac{w_j}{5} + 0.1 \cdot S_{\text{wait}}(j)$
             \EndFor
             
-            \State // 步骤3：按评分降序尝试调度
-            \State 将 $C$ 按 $S_{\text{total}}$ 降序排列
+            \State 将 $C$ 按 $S_{\text{total}}$ 降序排列 \Comment{步骤3：按评分降序尝试调度}
             \For{each $j$ in sorted $C$}
                 \State $success \gets \text{TryMapJob}(j)$  \Comment{调用单作业调度器}
                 \If{$success$}
                     \State 将 $j$ 从 $\mathcal{Q}_{\text{wait}}$ 移至 $\mathcal{Q}_{\text{run}}$，更新资源状态
                     \State 重置 $j$ 的跳过计数 $\text{skip}(j) \gets 0$
-                    \State \textbf{break}  \Comment{本周期只调度一个作业（可根据配置调度多个）}
+                    \State \textbf{break} 
                 \Else
                     \State $\text{skip}(j) \gets \text{skip}(j) + 1$
                 \EndIf
             \EndFor
             
-            \State // 步骤4：饥饿保护处理
-            \For{each $j \in \mathcal{Q}_{\text{wait}}$}
+            \For{each $j \in \mathcal{Q}_{\text{wait}}$} \Comment{步骤4：饥饿保护处理}
                 \If{$t - t_j^{\text{arr}} > T_{\text{th}}$}
                     \State 临时提升 $w_j \gets \min(w_j+1, 5)$  \Comment{优先级提升}
                 \EndIf
@@ -169,32 +170,31 @@
                 \EndIf
             \EndFor
         \EndFor
+        \Ensure 更新后的 $\mathcal{Q}_{\text{wait}}$，$\mathcal{Q}_{\text{run}}$ 及资源状态
     \end{algorithmic}
 \end{algorithm}
 
 \subsection{滚动窗口机制}
 窗口大小 $W_t$ 动态计算，其基本思想是：当系统剩余资源较多时，应扩大候选窗口，增加调度机会；当系统资源紧张时，缩小窗口，避免频繁失败尝试。具体公式：
 \begin{equation}
-    W_t = \min\left( \left\lfloor \beta \cdot \frac{\sum_{p \in \mathcal{P}} A_p^{\text{CPU}}(t)}{\max_{p \in \mathcal{P}} C_p^{\text{CPU}}} \cdot |\mathcal{P}| \right\rfloor,\; |\mathcal{Q}_{\text{wait}}(t)| \right),
+    W_t = \min\left( \left\lfloor \beta \cdot \frac{\sum_{p \in {P}} A_p^{\text{CPU}}(t)}{\max_{p \in {P}} C_p^{\text{CPU}}} \cdot |{P}| \right\rfloor,\; |{Q}_{\text{wait}}(t)| \right),
 \end{equation}
-其中 $\beta \in [1,3]$ 为窗口扩展因子，默认 $\beta=2$。分母使用最大节点CPU容量以归一化。若全部节点CPU空闲率均为100\%，则 $W_t = \beta |\mathcal{P}|$；若系统满载，则 $W_t=0$，不调度新作业。窗口内作业按\textbf{先入先出}顺序选取，即最早到达的 $W_t$ 个作业。
-
-该机制与实现代码中 $W = \min(\text{max\_load\_factor} \cdot |P|, |\text{queue}|)$ 形式兼容，但此处将固定因子 $\text{max\_load\_factor}$ 替换为负载自适应因子，更符合理论模型的动态特性。
+其中 $\beta \in [1,3]$ 为窗口扩展因子，默认 $\beta=2$。分母使用最大节点CPU容量以归一化。若全部节点CPU空闲率均为100\%，则 $W_t = \beta |{P}|$；若系统满载，则 $W_t=0$，不调度新作业。窗口内作业按\textbf{先入先出}顺序选取，即最早到达的 $W_t$ 个作业。这种机制能自适应调整调度范围，兼顾调度效率与成功率，避免在高负载时过多尝试导致资源碎片化。
 
 \subsection{资源适配度计算}
-资源适配度 $R_{\text{match}}(j)$ 衡量作业 $j$ 的总资源需求与当前网络剩余资源的匹配程度。为简化计算，采用\textbf{最大空闲资源归一化}方法：分别找出CPU、内存、带宽在各自实体中的最大空闲量，然后计算需求与该最大值的比值，并截断至1。数学表达式为：
+资源适配度 $R_{\text{match}}(j)$ 衡量作业 $j$ 的总资源需求与当前网络剩余资源的匹配程度。本文采用最大空闲资源归一化方法：分别找出CPU、内存、带宽在各自实体中的最大空闲量，然后计算需求与该最大值的比值，并截断至1。数学表达式为：
 \begin{equation}
-    R_{\text{match}}(j) = \frac{1}{3} \left[ \min\left(1, \frac{\text{CPU}^{\text{dem}}(j)}{\max_{p \in \mathcal{P}} A_p^{\text{CPU}}}\right) + \min\left(1, \frac{\text{RAM}^{\text{dem}}(j)}{\max_{p \in \mathcal{P}} A_p^{\text{RAM}}}\right) + \min\left(1, \frac{\text{BW}^{\text{dem}}(j)}{\max_{r \in \mathcal{R}} A_r^{\text{BW}}}\right) \right],
+    R_{\text{match}}(j) = \frac{1}{3} \left[ \min\left(1, \frac{\text{CPU}^{\text{dem}}(j)}{\max_{p \in {P}} A_p^{\text{CPU}}}\right) + \min\left(1, \frac{\text{RAM}^{\text{dem}}(j)}{\max_{p \in {P}} A_p^{\text{RAM}}}\right) + \min\left(1, \frac{\text{BW}^{\text{dem}}(j)}{\max_{r \in {R}} A_r^{\text{BW}}}\right) \right],
     \label{eq:match}
 \end{equation}
 其中：
 \begin{itemize}
-    \item $\text{CPU}^{\text{dem}}(j) = \sum_{n \in \mathcal{N}_j} \text{CPU}^N(n)$，作业总CPU需求；
-    \item $\text{RAM}^{\text{dem}}(j) = \sum_{n \in \mathcal{N}_j} \text{RAM}^N(n)$，作业总内存需求；
-    \item $\text{BW}^{\text{dem}}(j) = \sum_{v \in \mathcal{V}_j} b_v^{\min}$（或使用 $b_v^{\max}$，本文采用 $b_v^{\min}$ 作为保守估计）。
+    \item $\text{CPU}^{\text{dem}}(j) = \sum_{n \in {N}_j} \text{CPU}^N(n)$，作业总CPU需求；
+    \item $\text{RAM}^{\text{dem}}(j) = \sum_{n \in {N}_j} \text{RAM}^N(n)$，作业总内存需求；
+    \item $\text{BW}^{\text{dem}}(j) = \sum_{v \in {V}_j} BW_v^{\min}$（此处采用 $BW_v^{\min}$ 作为保守估计）。
 \end{itemize}
 
-该归一化方式计算简单，且能反映作业需求是否超过当前网络中任何单节点/链路的剩余能力。若所有空闲资源均大于需求，则 $R_{\text{match}}=1$；若需求超过最大空闲资源，则比值小于1，鼓励调度需求较小的作业。
+该归一化方式计算简单，且能反映作业需求是否超过当前网络中任何单节点和链路的剩余能力。若所有空闲资源均大于需求，则 $R_{\text{match}}=1$；若需求超过最大空闲资源，则比值小于1，鼓励调度需求较小的作业。
 
 \subsection{综合评分}
 每个候选作业的综合评分 $S_{\text{total}}(j)$ 由三部分加权组成：
@@ -213,80 +213,90 @@
 
 \subsection{饥饿保护策略}
 
-为保障长期公平性，MJOS引入双重饥饿防护：
+为保障长期公平性，CES-Multi-Job引入双重饥饿防护：
 
 \begin{enumerate}
-    \item \textbf{等待时间阈值提升}：若作业等待时间超过 $T_{\text{th}}$（例如100个时间单位），则将其优先级临时提升1级（不超过最大值5），使其在后续评分中获得更高优先级权重。
-    \item \textbf{强制预留调度}：若作业连续被跳过 $K$ 次（例如 $K=3$），则触发强制调度尝试：系统为该作业预留一份“最小资源包”——例如，为每个任务预留最小需求（CPU/RAM），并为通信链路预留 $b_v^{\min}$ 带宽。若预留成功，则立即调度该作业；否则保留其跳过计数，待后续资源充足时再尝试。
+    \item \textbf{等待时间阈值提升}：若作业等待时间超过 $T_{\text{th}}$，则将其优先级临时提升1级（不超过最大值5），使其在后续评分中获得更高优先级权重。
+    \item \textbf{强制预留调度}：若作业连续被跳过 $K$ 次，则触发强制调度尝试：系统为该作业预留一份“最小资源包”——例如，为每个任务预留最小需求（CPU/RAM），并为通信链路预留 $BW_v^{\min}$ 带宽。若预留成功，则立即调度该作业；否则保留其跳过计数，待后续资源充足时再尝试。
 \end{enumerate}
 
 这两种保护机制协同工作：前者提高评分排名，后者通过资源预留保证极端情况下的调度机会。
 
 \subsection{算法复杂度分析}
 
-每调度周期的主要开销在于：
+本节分析 CES-Multi-Job 调度算法的时空复杂度。设等待队列长度为 $J$，物理网络包含 $P$ 个节点和 $R$ 条链路。每个调度周期内，滚动窗口大小 $W$ 满足 $W \le J$，算法主要包含以下步骤：
+
 \begin{itemize}
-    \item 计算 $W$ 个作业的综合评分：$O(W)$。
-    \item 排序 $W$ 个作业：$O(W \log W)$。
-    \item 每个作业尝试映射：单作业调度器复杂度记为 $O(f(K_j, M, L))$。典型贪心映射为 $O(K_j M + \text{SPF cost})$，其中SPF为最短路径计算，可采用Floyd-Warshall预处理后 $O(1)$ 查询，因此总开销 $O(K_j M)$。
-    \item 饥饿保护遍历 $\mathcal{Q}_{\text{wait}}$：$O(|\mathcal{Q}_{\text{wait}}|)$。
+    \item 计算 $W$ 个作业的综合评分，耗时 $O(W)$；
+    \item 对 $W$ 个作业按评分排序，耗时 $O(W \log W)$；
+    \item 依次尝试映射至多 $W$ 个作业，每次映射调用单作业调度器，其复杂度为 $O(\Phi_{\max})$（$\Phi_{\max}$ 为单个作业调度开销的上界，与作业规模和神经网络结构有关，详见第四章），故映射阶段耗时 $O(W \Phi_{\max})$；
+    \item 遍历整个等待队列进行饥饿保护，耗时 $O(J)$。
 \end{itemize}
 
-实际中 $W$ 与 $|\mathcal{Q}_{\text{wait}}|$ 均受限于系统规模与作业到达率，算法可在毫秒级完成，适用于在线调度。
+因此，每个调度周期的总时间复杂度为 $O(W + W \log W + W \Phi_{\max} + J)$。由于 $W \le J$ 且 $\Phi_{\max}$ 在实际中为与作业规模相关的小常数，上式可简化为 $O(J \log J + J \Phi_{\max})$。在典型部署场景中，$J$ 通常为百数量级，且神经网络前向传播可在毫秒级完成，故算法能够满足在线调度的实时性要求。
+
+空间复杂度主要包括：存储物理网络状态（$O(P+R)$）、维护等待队列与运行队列的作业信息（$O(J \cdot (\max K_j + \max E_j))$），以及单作业调度器所用神经网络模型参数（$O(d_{\text{state}} \times d_{\text{hidden}} + d_{\text{hidden}}^2)$）。整体空间开销与网络规模、作业数量和作业规模呈线性关系，在边缘计算平台上可轻松支撑。
 
 \section{实验设计}
-\label{sec:experiment}
-
-为验证MJOS算法的有效性与鲁棒性，本节设计一套完整的仿真实验框架，涵盖物理网络生成、作业负载生成、对比算法、评估指标及统计分析方法。
+为验证CES-Multi-Job算法的有效性，本节设计了仿真实验框架，涵盖物理网络生成、作业负载生成、对比算法、评估指标及统计分析方法。
 
 \subsection{仿真环境设置}
-
 \subsubsection{物理网络拓扑}
-\begin{itemize}
-    \item 节点数 $M \in \{10,15,20\}$。
-    \item 链路生成：随机连通图，任意节点对连接概率 $p_{\text{edge}}=0.3$，并保证图连通；若连通分量多于1，则随机添加边直至全连通。
-    \item 节点资源：CPU与内存容量在区间 $[50,100]$ 内均匀随机采样，单位为“单位”。
-    \item 链路带宽：在 $[100,1000]$ Mbps内均匀随机采样。
-\end{itemize}
+仿真实验采用的物理网络包含 $10$ 个节点，构成一个随机连通图。节点之间的链路生成方式如下：首先，以概率 $p_{\text{edge}}=0.3$ 独立决定每一对节点之间是否存在链路，从而得到一个随机图；随后，检查该图的连通性，若存在多个连通分量，则随机添加边直至整个图变为连通图，以确保任意两个物理节点之间均存在可达路径。每个物理节点的资源容量（CPU核心数和内存大小）均在区间 $[50,100]$ 内按均匀分布随机取值，其中CPU单位为核心数，内存单位为吉字节（GB）。每条物理链路的带宽容量则在 $[100,1000]$ Mbps 范围内均匀随机采样，以模拟异构的网络环境。
 
 \subsubsection{作业到达过程}
-\begin{itemize}
-    \item 作业到达间隔服从泊松分布，到达率 $\lambda \in \{2,3,5\}$（单位：作业/时间单位）。
-    \item 每个作业的任务节点数 $K_j \sim \text{Uniform}\{3,4,5,6,7,8\}$。
-    \item 通信拓扑：在 $K_j$ 个任务节点间以概率 $p_{\text{comm}}=0.4$ 添加虚拟链路，并保证子图连通。
-    \item 任务CPU需求：$\text{CPU}^N(n) \sim \text{Uniform}[10,50]$。
-    \item 任务内存需求：$\text{RAM}^N(n) \sim \text{Uniform}[10,50]$。
-    \item 带宽需求区间：每条虚拟链路的 $b_v^{\min} \sim \text{Uniform}[10,50]$，$b_v^{\max} = b_v^{\min} + \text{Uniform}[0,50]$，保证 $b_v^{\max} \ge b_v^{\min}$。
-    \item 优先级权重 $w_j \sim \text{Uniform}\{1,2,3,4,5\}$。
-    \item 仿真总时长：$T_{\text{sim}} = 1000$ 时间单位。
-    \item 作业总数：动态生成，约为 $\lambda \cdot T_{\text{sim}}$，约200~500个。
-\end{itemize}
-
-\subsubsection{系统初始负载}
-为考察不同资源紧张程度下的算法性能，设置三种初始占用水平：
-\begin{itemize}
-    \item \textbf{宽松}：随机将节点资源的30\%预分配给若干模拟作业（运行队列中）；
-    \item \textbf{中等}：50\%初始占用；
-    \item \textbf{紧张}：70\%初始占用。
-\end{itemize}
+作业的到达过程服从泊松分布，其到达率$\lambda$取$3$（单位：作业/时间单位）。每个作业 $j$ 包含的任务节点数 $K_j$ 从集合 $\{3,4,5,6,7,8\}$ 中均匀随机选取。在任务节点之间，以概率 $p_{\text{comm}}=0.4$ 独立添加虚拟通信链路，并确保生成的通信子图是连通的，从而构成作业的内部拓扑结构。若生成的图不连通，则随机添加边直至连通。每个任务节点 $n$ 的CPU需求 $\text{CPU}^N(n)$ 和内存需求 $\text{RAM}^N(n)$ 均独立地在区间 $[10,50]$ 内按均匀分布随机生成。对于每条虚拟链路 $v$，其最小带宽需求 $b_v^{\min}$ 在 $[10,50]$ Mbps 内均匀随机采样，最大带宽需求则在此基础上增加一个 $[0,50]$ Mbps 的随机增量，即 $b_v^{\max} = b_v^{\min} + \text{Uniform}[0,50]$，以保证 $b_v^{\max} \geq b_v^{\min}$。作业的优先级权重 $w_j$ 为整数，从 $\{1,2,3,4,5\}$ 中均匀随机选取，数值越大表示业务紧急程度越高。仿真总时长设定为  时间单位，在此过程中动态生成作业，作业总数约为 $\lambda \cdot T_{\text{sim}}$，大致在$1200$个，具体数量服从泊松过程的随机性。
+仿真总时长设为$T_{\text{sim}} = 400$个时间单位。作业到达过程服从参数 $\lambda=3$ 的泊松分布，因此作业总数是一个期望值为 $ \lambda \cdot T_{\text{sim}} = 3 \cdot 400 = 1200 $ 的泊松随机变量，实际生成的数量将围绕该期望值随机波动。
 
 \subsection{对比算法}
+为评估本文提出的 CES-Multi-Job 调度算法的性能，我们选取四种具有代表性的调度策略作为对比基线，涵盖基于优先级的简单策略、经典作业调度策略以及源自现有研究的启发式方法。各对比算法的核心思想及其在本文仿真环境中的简化实现方式如下：
 
-选取五种代表性调度策略作为基准。
+\begin{itemize}
+    \item \textbf{SWTS}：每个作业的综合得分由以下四个因素加权组合：关键路径长度（CPL，与作业预计运行时间成反比）、任务并行度（TPS，与任务节点数 $K_j$ 正相关）、数据局部性评分（DLS，与总带宽需求 $\sum b_v^{\min}$ 成反比）以及资源匹配度（计算节点资源与任务需求的匹配程度）。此外，作业的优先级 $w_j$ 也被纳入评分体系。每次调度时，选择综合得分最高的作业进行映射。
 
+    \item \textbf{AdaEvo}：首先，结合作业的优先级和等待时间计算紧急度，然后根据紧急度将等待队列中的作业划分为 $K$ 组（等数量分组），并从紧急度最高的组内选取作业。组内评分综合考虑资源匹配度、CPL、TPS 和优先级，并以该组的紧急度加权，最终选择得分最高的作业进行调度。
+    
+    \item \textbf{FIFO（先入先出）}：最基础的调度策略，严格按照作业到达顺序进行调度。每次调度周期中，直接选择等待队列中等待时间最长的作业尝试映射，不涉及任何评分或资源匹配计算。
 
-所有算法均使用相同的单作业映射器（默认贪心首次适应）以保证公平对比。后续可扩展实验对比不同单作业调度器的影响。
+    \item \textbf{SJF（短作业优先）}：经典的作业调度算法，优先选择执行时间最短的作业以降低平均等待时间。在本文实现中，作业的执行时间由任务节点数 $K_j$ 近似表征，即每次遍历等待队列，选择 $K_j$ 最小的作业进行调度。该算法能够反映短作业对系统吞吐量的影响。
+\end{itemize}
 
+\subsection{实验结果分析}
+本节通过仿真实验对比 CES-Multi-Job 算法与四种基线算法（SWTS、AdaEvo、FIFO、SJF）的性能表现。实验围绕三个核心指标展开：作业平均等待时间、带宽需求满足度以及系统负载均衡度。所有算法均采用相同的单作业调度器（CES-PPO）以确保公平性，并在相同仿真环境下独立运行10次，取平均值作为最终结果。
 
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[scale=0.5]{Fig/avg_waiting_line.png}
+    \caption{\label{avg_waiting}等待时间统计图}
+\end{figure}
 
-所有指标均在仿真结束时统计，部分时间序列指标（如平均等待时间、带宽满足度）按每100个时间单位采样记录演化趋势。
+\textbf{等待时间分析}：图\ref{avg_waiting}展示了各算法下作业平均等待时间随仿真时间的变化趋势。观察可知，五种算法的等待时间曲线高度重合，均随仿真进程推进而逐渐增长，且在仿真结束时数值十分接近。这一现象表明，在本文设定的作业到达率（λ=3）和资源规模下，作业等待时间主要由系统负载和单作业调度器的执行效率主导，而非多作业选择策略。由于所有算法使用相同的底层调度器，作业一旦被选中，其执行时间分布基本一致，因此队列积压程度相近，导致等待时间无明显差异。
 
-\subsection{实验方案与统计方法}
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[scale=0.5]{Fig/avg_bw_satisfaction_line.png}
+    \caption{\label{avg_bw_satisfaction}带宽满足度统计图}
+\end{figure}
 
+\textbf{带宽满足度分析}：带宽满足度定义为作业实际分配带宽与需求带宽的比值，反映调度器对通信资源的保障能力。如图\ref{avg_bw_satisfaction}所示，CES-Multi-Job 算法的带宽满足度显著高于其他算法，而 SJF 和 FIFO 次之，SWTS 和 AdaEvo 相对较低。这一结果源于 CES-Multi-Job 在作业选择阶段显式考虑了带宽需求匹配：其综合评分中包含资源匹配度分量，倾向于选择通信需求与当前链路剩余带宽更匹配的作业。相比之下，SWTS 虽引入数据局部性评分，但该指标仅与总带宽需求成反比，未与实时可用带宽联动；AdaEvo 则侧重于紧急程度分组，带宽因素未占主导；FIFO 和 SJF 完全忽略带宽，仅靠映射器在单作业层面尽力满足，故带宽满足度居中。
 
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[scale=0.5]{Fig/load_balance_line.png}
+    \caption{\label{load_balance}负载均衡度统计图}
+\end{figure}
 
+\textbf{负载均衡度分析}：负载均衡度采用三类资源（CPU、内存、带宽）利用率的变异系数加权和（$L_t$）度量，值越小表示资源分布越均匀。实验结果如图\ref{load_balance}显示，SWTS 和 AdaEvo 的负载均衡度最佳（$L_t$ 值最低），CES-Multi-Job 与 SJF、FIFO 水平相当，略逊于前两者。SWTS 得益于其节点感知策略和动态调整机制，在任务分配时显式考虑节点负载，从而有效避免热点；AdaEvo 通过紧急程度分组和组内资源匹配，间接促进了资源均衡。CES-Multi-Job 虽在单作业映射层采用了负载最轻节点优先的贪心策略，但在多作业选择阶段以带宽满足度为主要优化目标，可能优先调度带宽需求高的作业，导致部分节点或链路负载集中，因此均衡性未达最优。SJF 和 FIFO 由于选择策略简单，依赖底层映射器的负载均衡能力，表现与 CES 相近。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[scale=0.5]{Fig/weighted_composite_line.png}
+    \caption{\label{weighted_composite}加权综合性能统计图}
+\end{figure}
+
+\textbf{综合性能评估}：为综合比较各算法的整体表现，构造加权性能指标 $P = \alpha \cdot B_{\text{sat}} - \beta \cdot L_t + \gamma \cdot (1 - T_{\text{wait}}/T_{\max})$，其中 $B_{\text{sat}}$ 为带宽满足度，$L_t$ 为负载均衡度，$T_{\text{wait}}$ 为平均等待时间，权重根据系统设计目标设定为 $\alpha=0.5,\beta=0.3,\gamma=0.2$。如图\ref{weighted_composite}结果表明，CES-Multi-Job 的综合得分最高，SJF 和 FIFO 次之，SWTS 和 AdaEvo 相对较低。这说明尽管 CES-Multi-Job 在负载均衡方面略有不足，但其在带宽满足度上的显著优势足以弥补这一短板，并在整体上取得最佳调度效果。SJF 和 FIFO 因实现简单且依赖底层映射器，在等待时间和带宽满足度上表现中等，综合性能尚可。SWTS 和 AdaEvo 虽负载均衡出色，但带宽满足度偏低，拉低了综合评分。
+
+综上，CES-Multi-Job 算法在保障作业通信需求方面具有明显优势，同时维持可接受的等待时间和负载均衡水平，整体调度性能优于对比算法。未来工作可进一步引入动态负载均衡机制，在带宽优化与资源均匀分布之间寻求更优平衡。
 
 \section{本章小结}
-本文面向协同边缘计算环境下的多分布式学习作业调度问题，提出了一种在线启发式调度算法MJOS。该算法通过动态滚动窗口控制决策规模，利用资源感知评分引导作业调度顺序，并引入等待时间阈值与强制预留机制防止饥饿，综合优化了带宽满足度、负载均衡度与平均等待时间三个相互冲突的指标。与现有分阶段调度方法相比，MJOS将计算与网络资源联合考虑，且与任意单作业调度器兼容，具有良好的可扩展性与实用性。
-
-文章完成了问题形式化建模、算法详细设计及完整的仿真实验方案。后续工作将基于所述实验设计进行代码实现与大规模仿真验证，并探索以下方向：（1）将窗口自适应因子 $\beta$ 与等待敏感参数 $\tau$ 动态在线调优；（2）引入多作业并行调度能力，进一步提升资源利用率；（3）将MJOS扩展至异构资源（如GPU、NPU）场景。
+本文面向协同边缘计算环境下的多分布式学习作业调度问题，提出了一种在线启发式调度算法CES-Multi-Job。该算法通过动态滚动窗口控制决策规模，利用资源感知评分引导作业调度顺序，并引入等待时间阈值与强制预留机制防止饥饿，综合优化了带宽满足度、负载均衡度与平均等待时间三个相互冲突的指标。与现有分阶段调度方法相比，CES-Multi-Job将计算与网络资源联合考虑，且与任意单作业调度器兼容，具有良好的可扩展性与实用性。
