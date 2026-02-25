@@ -197,16 +197,8 @@ R_{\text{total}} = R_{\text{step}} + \lambda_{\text{heuristic}} \cdot R_{\text{h
 
 其中，$\lambda_{\text{heuristic}}$是一个采用线性衰减调度的权重系数，在训练初期设定较高（如0.8），以注入强领域先验知识，引导智能体快速避开无效搜索空间；随着训练进行，其权重逐步降低（至0.1），促使智能体更多依赖从环境交互中学到的长期策略，从而平衡"引导学习"与"自主探索"。
 \subsection{整体算法框架}
-\label{subsec:algorithm-framework}
-本文提出的基于PPO的联合资源调度算法框架如图\ref{fig:algorithm_framework}所示。算法核心是通过深度强化学习实现计算资源与网络资源的协同调度，将传统NP难的组合优化问题转化为序列决策过程。
+本文提出的基于PPO的联合资源调度算法核心是通过深度强化学习实现计算资源与网络资源的协同调度，将传统NP难的组合优化问题转化为序列决策过程。算法\ref{alg:overall}展示了整体调度流程。
 
-\begin{figure}[htbp]
-    \centering
-    % \includegraphics[width=0.9\textwidth]{figures/algorithm_framework.pdf}
-    \caption{基于PPO的联合资源调度算法框架}
-    \label{fig:algorithm_framework}
-\end{figure}
-算法\ref{alg:overall}展示了整体调度流程：
 \begin{algorithm}
     \caption{基于PPO的联合资源调度算法}
     \label{alg:overall}
@@ -241,49 +233,6 @@ R_{\text{total}} = R_{\text{step}} + \lambda_{\text{heuristic}} \cdot R_{\text{h
         \State $\textbf{Output:}\; \text{节点映射 } X,\; \text{带宽分配 } B$
     \end{algorithmic}
 \end{algorithm}
-% \begin{algorithm}
-% % \floatname{algorithm}{Algorithm}%更改算法前缀名称
-% \renewcommand{\algorithmicrequire}{\heiti{\textbf 输入:}}% 更改输入名称
-% \renewcommand{\algorithmicensure}{\heiti{\textbf 主迭代:}}% 更改输出名称
-% \newcommand{\LASTCON}{\item[\algorithmiclastcon]}
-% \newcommand{\algorithmiclastcon}{\heiti{\textbf 输出:}}% 更改输出名称
-% \footnotesize
-% \caption{基于PPO的联合资源调度算法}
-% \label{alg:overall}
-% \begin{algorithmic}[1]
-% \REQUIRE 物理网络拓扑$G_P$，虚拟网络请求$G_V$
-% \ENSURE
-% \STATE 初始化策略网络$\pi_\theta$，价值网络$V_\varphi$
-% \FOR{$episode = 1$ \TO $N$}
-% % \STATE // 步骤1：环境初始化
-% \STATE $state \leftarrow env.reset(G_P, G_V)$
-% % \STATE // 步骤2：序列决策过程
-%     \FOR{$step = 1$ \TO $M$}
-%         % \STATE // 2.1 状态编码与动作选择
-%         \IF{当前阶段 = 节点映射阶段}
-%             \STATE $action \leftarrow \pi_\theta(state)$ \COMMENT{选择物理节点}
-%             \STATE 执行节点映射，更新资源约束
-%         \ELSE
-%             \STATE $action \leftarrow \pi_\theta(state)$ \COMMENT{选择带宽等级}
-%             \STATE 执行带宽分配，更新链路约束
-%         \ENDIF
-        
-%         % \STATE // 2.2 接收奖励与环境转移
-%         \STATE $reward \leftarrow calculate\_reward(state, action)$
-%         \STATE $next\_state \leftarrow env.step(action)$
-        
-%         % \STATE // 2.3 存储经验数据
-%         \STATE 存储$(state, action, reward, next\_state)$
-%     \ENDFOR
-    
-%     % \STATE // 步骤3：PPO策略更新
-%     \STATE 计算优势函数 $A_t = R_t - V_\varphi(s_t)$
-%     \STATE 计算策略损失 $L^{CLIP}(\theta) = \mathbb{E}[\min(r_t(\theta)A_t, \text{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon)A_t)]$
-%     \STATE 更新策略网络$\pi_\theta$和价值网络$V_\varphi$
-% \ENDFOR
-% \LASTCON 节点映射$X$，带宽分配$B$
-% \end{algorithmic}
-% \end{algorithm}
 
 \subsection{双分支策略网络架构设计}
 \label{subsec:network-architecture}
@@ -291,7 +240,7 @@ R_{\text{total}} = R_{\text{step}} + \lambda_{\text{heuristic}} \cdot R_{\text{h
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[scale=0.5]{Fig/network_architecture.png}
+    \includegraphics[scale=0.47]{Fig/ces-cn_2A-C.png}
     \caption{\label{network_architecture}双分支策略网络架构}
 \end{figure}
 
@@ -438,7 +387,7 @@ L^{CLIP}(\theta) = \mathbb{E}_t[\min(r_t(\theta)\hat{A}_t, \text{clip}(r_t(\thet
     \includegraphics[scale=0.3]{Fig/simulation_result_load.png}
     \caption{\label{simulation_result_load}不同物理环境负载程度下的仿真实验结果}
 \end{figure}
-仿真实验结果如图\ref{simulation_result_node_number}和图\ref{simulation_result_load}所示。综合分析表明，本文提出的计算与网络资源联合调度算法（CES-PPO）在不同任务节点规模以及不同物理环境负载程度下，其综合性能均展现出显著且稳定的优势。这一优势源于联合调度框架能够在对节点计算资源进行映射决策的同时，一体化评估并优化物理网络的链路带宽分配，从而更精准地满足通信约束。
+仿真实验结果如图\ref{simulation_result_node_number}和图\ref{simulation_result_load}所示。综合分析表明，本文提出的计算与网络资源联合调度算法CES-PPO在不同任务节点规模以及不同物理环境负载程度下，其综合性能均展现出显著且稳定的优势。这一优势源于联合调度框架能够在对节点计算资源进行映射决策的同时，一体化评估并优化物理网络的链路带宽分配，从而更精准地满足通信约束。
 在带宽满足度方面，CES-PPO在所有实验场景下均显著优于所有对比基线。这得益于算法在奖励函数与决策过程中对网络链路状态的显式建模与优化，使其能够精准适配动态复杂的带宽约束。从图\ref{simulation_result_node_number}可见，随着任务节点数增加，CES-PPO的带宽满足度保持领先；从图\ref{simulation_result_load}可见，在不同物理环境负载程度下，CES-PPO的带宽满足度同样最优，Smart次之，而FlexiTask与PPO-Balance表现相近且位于第三梯队。
 在负载均衡度方面，各算法的表现整体较为接近，且均随任务规模增大或物理负载升高而有所下降。CES-PPO的负载均衡度与PPO-Balance、FlexiTask及Smart等优化算法平均水平相当，但略低于其中表现最好的算法。这反映了CES-PPO在多目标优化中的权衡策略：为保障对通信性能更为关键的带宽需求，在绝对意义上的节点间负载均衡性上做出了有意识、可控的妥协。
 从综合指标（$0.5 \times (1 - L) + 0.5 \times D_{BW}$）来看，CES-PPO在所有实验场景下均取得最优值，Smart次之，FlexiTask与PPO-Balance则表现相近且处于第三梯队。这一结果充分验证了联合调度机制的有效性：通过在一个决策循环内协同处理计算与网络资源，算法能够实现整体系统效能的帕累托改进，避免传统分阶段调度可能带来的目标冲突与次优解。
