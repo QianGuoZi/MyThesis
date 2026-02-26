@@ -361,14 +361,15 @@ L^{CLIP}(\theta) = \mathbb{E}_t[\min(r_t(\theta)\hat{A}_t, \text{clip}(r_t(\thet
 
 \subsection{对比方法}
 为全面评估本文提出的算法性能，本文选取以下4种对比算法：
+\begin{itemize}
+    \item \textbf{PPO Balance算法}\cite{A2C-DRL}：基于A2C-DRL\cite{A2C-DRL}算法思想实现的PPO调度算法。其策略网络将节点资源状态与任务需求编码为输入，输出各节点的选择概率，并采用贪心策略完成映射，训练目标已融合负载均衡与网络效率优化。带宽分配阶段则采用启发式规则，依据虚拟节点在请求拓扑中的重要性（如节点度）为其物理链路分配带宽，重要性高的链路获得更高带宽。
 
-（1）PPO Balance算法：基于A2C-DRL\cite{A2C-DRL}算法思想实现的PPO调度算法。其策略网络将节点资源状态与任务需求编码为输入，输出各节点的选择概率，并采用贪心策略完成映射，训练目标已融合负载均衡与网络效率优化。带宽分配阶段则采用启发式规则，依据虚拟节点在请求拓扑中的重要性（如节点度）为其物理链路分配带宽，重要性高的链路获得更高带宽。
+    \item \textbf{FlexiTask算法}\cite{FlexiTask}：模仿Kubernetes的两阶段调度框架。预选阶段过滤出满足资源需求与负载阈值（如短期平均与长期峰值利用率）的候选节点；优选阶段综合资源空闲度、均衡度及节点选择热度等因素进行评分，选择得分最高的节点进行映射。
 
-（2）FlexiTask算法\cite{FlexiTask}：模仿Kubernetes的两阶段调度框架。预选阶段过滤出满足资源需求与负载阈值（如短期平均与长期峰值利用率）的候选节点；优选阶段综合资源空闲度、均衡度及节点选择热度等因素进行评分，选择得分最高的节点进行映射。
+    \item \textbf{Smart算法}：基于多因素加权评分的决策方法。对每个物理节点分别计算资源效率、负载均衡性、网络连接性与资源余量四个维度的分数，按预设权重加权求和，选择总分最高的节点；带宽分配阶段则依据虚拟节点的重要性进行差异化分配。
 
-（3）Smart算法：基于多因素加权评分的决策方法。对每个物理节点分别计算资源效率、负载均衡性、网络连接性与资源余量四个维度的分数，按预设权重加权求和，选择总分最高的节点；带宽分配阶段则依据虚拟节点的重要性进行差异化分配。
-
-（4）Random算法：作为基准对比方法，完全不进行优化。节点映射阶段在所有物理节点中随机选择；带宽分配阶段在可用带宽等级中随机分配，体现最基础的随机调度行为。
+    \item \textbf{Random算法}：作为基准对比方法，完全不进行优化。节点映射阶段在所有物理节点中随机选择；带宽分配阶段在可用带宽等级中随机分配，体现最基础的随机调度行为。
+\end{itemize}
 
 \subsection{仿真实验}
 \subsubsection{实验环境}
@@ -379,12 +380,12 @@ L^{CLIP}(\theta) = \mathbb{E}_t[\min(r_t(\theta)\hat{A}_t, \text{clip}(r_t(\thet
 \subsubsection{实验分析}
 \begin{figure}[htbp]
     \centering
-    \includegraphics[scale=0.3]{Fig/simulation_result_node_number.png}
+    \includegraphics[scale=0.3]{Fig/simulation_result_node_number_zh.png}
     \caption{\label{simulation_result_node_number}不同任务节点数量下的仿真实验结果}
 \end{figure}
 \begin{figure}[htbp]
     \centering
-    \includegraphics[scale=0.3]{Fig/simulation_result_load.png}
+    \includegraphics[scale=0.3]{Fig/simulation_result_load_zh.png}
     \caption{\label{simulation_result_load}不同物理环境负载程度下的仿真实验结果}
 \end{figure}
 仿真实验结果如图\ref{simulation_result_node_number}和图\ref{simulation_result_load}所示。综合分析表明，本文提出的计算与网络资源联合调度算法CES-PPO在不同任务节点规模以及不同物理环境负载程度下，其综合性能均展现出显著且稳定的优势。这一优势源于联合调度框架能够在对节点计算资源进行映射决策的同时，一体化评估并优化物理网络的链路带宽分配，从而更精准地满足通信约束。
@@ -399,7 +400,7 @@ L^{CLIP}(\theta) = \mathbb{E}_t[\min(r_t(\theta)\hat{A}_t, \text{clip}(r_t(\thet
 \subsubsection{实验分析}
 \begin{figure}[htbp]
     \centering
-    \includegraphics[scale=0.5]{Fig/real_result.png}
+    \includegraphics[scale=0.5]{Fig/real_result_zh.png}
     \caption{\label{real_result}真实环境实验}
 \end{figure}
 真实环境下的实验结果如图\ref{real_result}所示。总体来看，本文算法在三种分布式学习架构下的综合指标均保持领先，验证了其在实际异构边缘环境中的有效性与鲁棒性，这尤其突显了算法应对异构资源需求与复杂通信拓扑的实用性。具体分析如下：在带宽满足度上，本文算法相较于对比方法有明显提升，这与仿真实验结论一致，凸显了其网络优化能力的泛化性。在负载均衡度上，本文算法表现处于可接受范围，虽未达到最优，但通过与高带宽满足度的结合，最终在综合指标上取得了最佳平衡。值得注意的是，算法在不同通信拓扑下展现了差异化的特性：在Gossip Learning架构下，其负载均衡度优于PPO-Balance算法；而在E-Tree Learning架构下，其综合性能与PPO-Balance相当。这些结果表明，本文算法能够自适应地处理不同通信模式带来的调度挑战，尤其擅长在存在大量随机或复杂通信需求的场景中协调资源。实验证实，本文算法能够很好地集成到CES系统中，并有效支撑真实的分布式学习任务。
@@ -407,7 +408,7 @@ L^{CLIP}(\theta) = \mathbb{E}_t[\min(r_t(\theta)\hat{A}_t, \text{clip}(r_t(\thet
 \subsection{消融实验}
 \begin{figure}[htbp]
     \centering
-    \includegraphics[scale=0.3]{Fig/ablation_experiments.png}
+    \includegraphics[scale=0.3]{Fig/ablation_experiments_zh.png}
     \caption{\label{ablation_experiments}消融实验}
 \end{figure}
 为验证算法中启发式奖励机制的核心作用，我们进行了消融实验，结果如图\ref{ablation_experiments}所示。实验完整对比了引入启发式奖励的算法与将其移除后的基线版本。实验结果表明，启发式奖励对算法性能起到了关键的促进作用。具体而言：在带宽满足度上，完整算法相比基线有显著提升，这直接证明了该奖励项能有效引导智能体在策略探索中，优先关注网络链路带宽的分配效率与约束满足。与此同时，在负载均衡度方面，完整算法与基线模型仍保持相近水平，说明其性能增益并未以严重牺牲负载均衡为代价。以上结果充分证实，我们所设计的启发式奖励机制成功地在“负载均衡”与“带宽满足”这两个存在一定冲突的目标之间实现了高效权衡。更进一步，该奖励函数的核心价值在于引导调度器将计算资源与网络资源视为相互关联的联合决策变量进行整体评估，而非彼此独立的优化维度，从而驱动智能体学习到整体更优的联合调度策略。
