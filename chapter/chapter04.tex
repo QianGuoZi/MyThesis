@@ -5,7 +5,7 @@
 \subsection{边缘环境}
 边缘环境包含物理节点集$P$与物理链路集$R$。一个边缘环境包含多个物理节点和多条物理链路。每个物理节点$p$有固定的CPU资源$CPU^P(p)$和内存资源$RAM^P(p)$。链接两个物理节点$p_i$和$p_j$的物理链路集合记为$R^{p_i}_{p_j}=\{r_a,r_b,…\}$。每条物理链路是有向的，且有固定的带宽资源$BW^R{(r)}$。
 \subsection{作业}
-作业节点集$N$、作业链路集$V$。一个作业中包含多个任务节点和多条任务链路。每个任务节点$n$有所需的CPU资源$CPU^N(n)$和内存资源$RAM^N(n)$。任务网络建模成P2P网络，相连的两个任务节点$n_i$和$n_j$之间仅存在一条链路，记为$V^{n_i}_{n_j}=v$。每条链路是有向的，其所需的带宽资源是弹性的，最小带宽为$BW_{min}^V(v)$，最大带宽为$BW_{max}^V(v)$，动态分配变量$B^V(v)$表示实际分配的带宽，且$BW_{min}^V(v)\leq B^V(v) \leq BW_{max}^V(v)$。当两个任务节点映射到同一个物理节点时，他们之间的链路将不再消耗物理带宽资源，即可以最大地满足用户的带宽请求。带宽分配变量$B(v)$由调度器动态决策，在满足$BW_{min}^V(v) \leq B^V(v) \leq BW_{max}^V(v)$前提下优化全局目标。
+作业节点集$N$、作业链路集$V$。一个作业中包含多个任务节点和多条任务链路。每个任务节点$n$有所需的CPU资源$CPU^N(n)$和内存资源$RAM^N(n)$。任务网络建模成P2P网络，相连的两个任务节点$n_i$和$n_j$之间仅存在一条链路，记为$V^{n_i}_{n_j}=v$。每条链路是有向的，其所需的带宽资源是弹性的，最小带宽为$BW_{min}^V(v)$，最大带宽为$BW_{max}^V(v)$，动态分配变量$B^V(v)$表示实际分配的带宽，且$BW_{min}^V(v)\leq B^V(v) \leq BW_{max}^V(v)$。当两个任务节点映射到同一个物理节点时，他们之间的链路将不再消耗物理带宽资源，即可以最大地满足用户的带宽请求。带宽分配变量$B^V(v)$由调度器动态决策，在满足$BW_{min}^V(v) \leq B^V(v) \leq BW_{max}^V(v)$前提下优化全局目标。
 \subsection{任务映射与带宽分配的关系与条件}
 联合调度问题是在遵循特定约束条件的情况下，将作业的任务节点映射到物理节点上，并且为作业中的每一条任务网络边分配带宽。
 该过程可以分解为两个阶段，即任务节点映射和带宽分配。任务节点映射是指在资源约束条件下将每个工作的任务节点映射到物理节点，并通过Dijkstra算法为每条任务链路寻找两个任务节点映射到的物理节点之间的一条最短路径。不同的任务节点可以共享同一个物理节点，即任务节点到物理节点的映射关系：
@@ -42,7 +42,7 @@
 带宽分配是指为每条任务链路分配具体的带宽数值，若两个任务节点映射到同一个物理节点上，则该任务链路不消耗物理链路的带宽。
 任务链路带宽的分配范围：
 \begin{equation}
-BW_{min}^V(v) \leq B(v) \leq BW_{max}^V(v)
+BW_{min}^V(v) \leq B^V(v) \leq BW_{max}^V(v)
 \end{equation}
 
 每条物理链路拥有的带宽资源能够满足任务链路：
@@ -63,7 +63,7 @@ BW_{min}^V(v) \leq B(v) \leq BW_{max}^V(v)
     U^{\text{RAM}}(p) = \frac{\sum\limits_{n \in N} \left( X_p^n \cdot \text{RAM}^N(n) \right)}{\text{RAM}^P(p)},
 \end{equation}
 \begin{equation}
-    U^{\text{BW}}(r) = \frac{\sum\limits_{v \in V} \left( Y_r^v \cdot B(v) \right)}{\text{BW}^R(r)}
+    U^{\text{BW}}(r) = \frac{\sum\limits_{v \in V} \left( Y_r^v \cdot B^V(v) \right)}{\text{BW}^R(r)}
 \end{equation}
 对应的平均利用率为：
 \begin{equation}
@@ -103,7 +103,7 @@ L = w_1 \cdot L^{CPU} + w_2 \cdot L^{RAM} + w_3 \cdot L^{BW}
 \delta(v) =
 \begin{cases}
 1 & \text{if } BW_{\max}^V(v) = BW_{\min}^V(v) \\
-\frac{B(v) - BW_{\min}^V(v)}{BW_{\max}^V(v) - BW_{\min}^V(v)} & \text{otherwise}
+\frac{B^V(v) - BW_{\min}^V(v)}{BW_{\max}^V(v) - BW_{\min}^V(v)} & \text{其他}
 \end{cases}
 \end{equation}
 
@@ -144,12 +144,13 @@ D_{BW} = \frac{1}{|V|} \sum_{v \in V} \delta(v)
 \label{subsubsec:state-space}
 
 状态空间需要同时捕捉物理环境、作业需求与决策进度三方面信息：
+\begin{itemize}
+    \item \textbf{边缘环境状态}：每个物理节点的可用CPU、可用内存以及关联链路的平均可用带宽，构成维度为$[|P|, 3]$的矩阵。
 
-\textbf{边缘环境状态}：每个物理节点的可用CPU、可用内存以及关联链路的平均可用带宽，构成维度为$[|P|, 3]$的矩阵。
+    \item \textbf{作业状态}：每个任务节点的CPU需求、内存需求及其出链路的平均带宽需求，构成维度为$[|N|, 3]$的矩阵。
 
-\textbf{作业状态}：每个任务节点的CPU需求、内存需求及其出链路的平均带宽需求，构成维度为$[|N|, 3]$的矩阵。
-
-\textbf{决策过程状态}：包括当前决策阶段（任务节点映射或带宽分配）、当前处理的任务节点/链路索引、任务节点/链路总数以及已完成映射的比例。
+    \item \textbf{决策过程状态}：包括当前决策阶段（任务节点映射或带宽分配）、当前处理的任务节点/链路索引、任务节点/链路总数以及已完成映射的比例。
+\end{itemize}
 
 为处理可变规模的作业，采用零填充将特征矩阵统一到最大维度，并进行归一化以提升训练稳定性。完整状态$s \in S$可表示为：
 
@@ -164,22 +165,23 @@ s = [s_p; s_v; s_d]
 \label{subsubsec:action-space}
 
 动作空间采用两阶段离散化设计，分别对应任务映射与带宽分配：
-
-\textbf{任务节点映射阶段}：从物理节点集合中选择一个节点部署当前任务节点，动作空间大小为$|P|$，动作表示为：
+\begin{itemize}
+    \item \textbf{任务节点映射阶段}：从物理节点集合中选择一个节点部署当前任务节点，动作空间大小为$|P|$，动作表示为：
 \begin{equation}
 a_{map} \in \{0, 1, \dots, |P|-1\}
 \label{eq:map-action}
 \end{equation}
 
-\textbf{带宽分配阶段}：虽然原始问题中带宽需求为连续区间$[BW_{min}^V(v), BW_{max}^V(v)]$，但为提升算法训练稳定性和计算效率，采用离散化处理。该设计将连续带宽需求均匀划分为$L$个等级，从预设离散带宽等级中选择分配等级，动作空间大小为$L$，动作表示为：
+    \item \textbf{带宽分配阶段}：虽然原始问题中带宽需求为连续区间$[BW_{min}^V(v), BW_{max}^V(v)]$，但为提升算法训练稳定性和计算效率，采用离散化处理。该设计将连续带宽需求均匀划分为$L$个等级，从预设离散带宽等级中选择分配等级，动作空间大小为$L$，动作表示为：
 \begin{equation}
 a_{bw} \in \{0, 1, \dots, L-1\}
 \label{eq:bw-action}
 \end{equation}
+\end{itemize}
 
 实际分配的带宽值为：
 \begin{equation}
-B(v) = BW_{min}^V(v) + \frac{a_{bw}}{L-1} \times (BW_{max}^V(v) - BW_{min}^V(v))
+B^V(v) = BW_{min}^V(v) + \frac{a_{bw}}{L-1} \times (BW_{max}^V(v) - BW_{min}^V(v))
 \label{eq:bandwidth-allocation}
 \end{equation}
 
@@ -282,7 +284,7 @@ V(s) = W_{val} \cdot \text{ReLU}(W_{val_hidden} \cdot h + b_{val_hidden}) + b_{v
 
 \subsubsection{基础奖励}
 \label{subsubsec:base-reward}
-基础奖励$R_{base}$为智能体的单步决策提供即时的可行性反馈与质量引导。具体而言，节点映射奖励$R_{map}$由成功指示函数、CPU利用率与理想值（$U_{ideal}=0.625$）的接近度、以及内存利用率与理想值的接近度三部分加权构成，旨在鼓励成功映射的同时引导资源使用趋向均衡高效；带宽分配奖励$R_{bw}$则定义为实际分配带宽$B(v)$在其需求区间$[BW_{min}^V(v), BW_{max}^V(v)]$内的归一化满足度，直接反映了当前链路服务质量需求的达成情况。
+基础奖励$R_{base}$为智能体的单步决策提供即时的可行性反馈与质量引导。具体而言，节点映射奖励$R_{map}$由成功指示函数、CPU利用率与理想值（$U_{ideal}=0.625$）的接近度、以及内存利用率与理想值的接近度三部分加权构成，旨在鼓励成功映射的同时引导资源使用趋向均衡高效；带宽分配奖励$R_{bw}$则定义为实际分配带宽$B^V(v)$在其需求区间$[BW_{min}^V(v), BW_{max}^V(v)]$内的归一化满足度，直接反映了当前链路服务质量需求的达成情况。
 
 \subsubsection{启发式奖励设计}
 \label{subsubsec:heuristic-reward}
@@ -362,7 +364,7 @@ L^{CLIP}(\theta) = \mathbb{E}_t[\min(r_t(\theta)\hat{A}_t, \text{clip}(r_t(\thet
 \subsection{对比方法}
 为全面评估本文提出的算法性能，本文选取以下4种对比算法：
 \begin{itemize}
-    \item \textbf{PPO Balance算法}\cite{A2C-DRL}：基于A2C-DRL\cite{A2C-DRL}算法思想实现的PPO调度算法。其策略网络将节点资源状态与任务需求编码为输入，输出各节点的选择概率，并采用贪心策略完成映射，训练目标已融合负载均衡与网络效率优化。带宽分配阶段则采用启发式规则，依据虚拟节点在请求拓扑中的重要性（如节点度）为其物理链路分配带宽，重要性高的链路获得更高带宽。
+    \item \textbf{PPO Balance算法}：基于A2C-DRL\cite{A2C-DRL}算法思想实现的PPO调度算法。其策略网络将节点资源状态与任务需求编码为输入，输出各节点的选择概率，并采用贪心策略完成映射，训练目标已融合负载均衡与网络效率优化。带宽分配阶段则采用启发式规则，依据虚拟节点在请求拓扑中的重要性（如节点度）为其物理链路分配带宽，重要性高的链路获得更高带宽。
 
     \item \textbf{FlexiTask算法}\cite{FlexiTask}：模仿Kubernetes的两阶段调度框架。预选阶段过滤出满足资源需求与负载阈值（如短期平均与长期峰值利用率）的候选节点；优选阶段综合资源空闲度、均衡度及节点选择热度等因素进行评分，选择得分最高的节点进行映射。
 
@@ -390,8 +392,7 @@ L^{CLIP}(\theta) = \mathbb{E}_t[\min(r_t(\theta)\hat{A}_t, \text{clip}(r_t(\thet
 \end{figure}
 仿真实验结果如图\ref{simulation_result_node_number}和图\ref{simulation_result_load}所示。综合分析表明，本文提出的计算与网络资源联合调度算法CES-PPO在不同任务节点规模以及不同物理环境负载程度下，其综合性能均展现出显著且稳定的优势。这一优势源于联合调度框架能够在对节点计算资源进行映射决策的同时，一体化评估并优化物理网络的链路带宽分配，从而更精准地满足通信约束。
 在带宽满足度方面，CES-PPO在所有实验场景下均显著优于所有对比基线。这得益于算法在奖励函数与决策过程中对网络链路状态的显式建模与优化，使其能够精准适配动态复杂的带宽约束。从图\ref{simulation_result_node_number}可见，随着任务节点数增加，CES-PPO的带宽满足度保持领先；从图\ref{simulation_result_load}可见，在不同物理环境负载程度下，CES-PPO的带宽满足度同样最优，Smart次之，而FlexiTask与PPO-Balance表现相近且位于第三梯队。
-在负载均衡度方面，各算法的表现整体较为接近，且均随任务规模增大或物理负载升高而有所下降。CES-PPO的负载均衡度与PPO-Balance、FlexiTask及Smart等优化算法平均水平相当，但略低于其中表现最好的算法。这反映了CES-PPO在多目标优化中的权衡策略：为保障对通信性能更为关键的带宽需求，在绝对意义上的节点间负载均衡性上做出了有意识、可控的妥协。
-从综合指标（$0.5 \times (1 - L) + 0.5 \times D_{BW}$）来看，CES-PPO在所有实验场景下均取得最优值，Smart次之，FlexiTask与PPO-Balance则表现相近且处于第三梯队。这一结果充分验证了联合调度机制的有效性：通过在一个决策循环内协同处理计算与网络资源，算法能够实现整体系统效能的帕累托改进，避免传统分阶段调度可能带来的目标冲突与次优解。
+在负载均衡度方面，各算法的表现整体较为接近，且均随任务规模增大或物理负载升高而有所下降。CES-PPO的负载均衡度与PPO-Balance、FlexiTask及Smart等优化算法平均水平相当，但略低于其中表现最好的算法。这反映了CES-PPO在多目标优化中的权衡策略，即为保障对通信性能更为关键的带宽需求，在绝对意义上的节点间负载均衡性上做出了一定的妥协。从综合指标（$0.5 \times (1 - L) + 0.5 \times D_{BW}$）来看，CES-PPO在所有实验场景下均取得最优值，Smart次之，FlexiTask与PPO-Balance则表现相近且处于第三梯队。这一结果充分验证了联合调度机制的有效性：通过在一个决策循环内协同处理计算与网络资源，算法能够实现整体系统效能的帕累托改进，避免传统分阶段调度可能带来的目标冲突与次优解。
 
 \subsection{真实环境实验}
 \subsubsection{真实环境实验}
