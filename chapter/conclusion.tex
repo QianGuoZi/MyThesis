@@ -1,10 +1,5 @@
 \chapter{总结与展望}
-\begin{fontsize}{15pt}{22.5pt}
-    \begin{flushleft}
-        \heiti 总结
-    \end{flushleft}
-\end{fontsize}
-
+\section*{总结}
 本文围绕协同边缘计算环境中分布式训练等复杂任务的资源调度问题展开研究，针对现有方法在任务建模与资源协同调度方面的不足，设计并实现了一套面向计算与网络资源联合调度的智能系统CES（Collaborative Edge Scheduler），主要贡献如下：
 
 \begin{enumerate}[topsep = 0 pt, itemsep= 0 pt, parsep=0pt, partopsep=0pt, leftmargin=0pt, itemindent=44pt, labelsep=6pt, listparindent=24pt, label=(\arabic*)]
@@ -17,12 +12,7 @@
 
 通过仿真实验与真实环境部署验证，本文所提出的方法在多种任务规模、通信拓扑与负载条件下均表现出优于现有基线方法的综合性能，证明了联合调度机制在处理复杂边缘智能任务中的有效性与鲁棒性。
 
-\begin{fontsize}{15pt}{22.5pt}
-    \begin{flushleft}
-        \heiti 展望
-    \end{flushleft}
-\end{fontsize}
-
+\section*{展望}
 尽管本文在协同边缘计算资源调度方面取得了一定进展，但仍存在若干值得深入研究的方向：
 \begin{enumerate}[topsep = 0 pt, itemsep= 0 pt, parsep=0pt, partopsep=0pt, leftmargin=0pt, itemindent=44pt, labelsep=6pt, listparindent=24pt, label=(\arabic*)]
     \item 异构资源（如GPU/NPU）的扩展支持：随着边缘智能任务的多样化，GPU、NPU等异构计算资源日益重要。未来可将CES框架扩展至支持多种异构资源类型，并设计相应的资源建模与调度策略。
