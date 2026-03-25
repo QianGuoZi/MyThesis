@@ -124,7 +124,7 @@ L_t = w_1 L_t^{\text{CPU}} + w_2 L_t^{\text{RAM}} + w_3 L_t^{\text{BW}},
 \begin{equation}
     \max_{S_t} \; \alpha_1 \bar{D}_{\text{BW}}(t+|S_t|) + \alpha_2 \left(1 - L_{t+|S_t|}\right) + \alpha_3 \left(1 - \frac{\bar{T}_{\text{wait}}(t+|S_t|)}{T_{\max}}\right),
 \end{equation}
-其中 $\alpha_1=0.5$，$\alpha_2=0.3$，$\alpha_3=0.2$，$T_{\max}$ 为最大容忍等待时间（设为仿真长度或经验值）。
+其中 $\alpha_1=0.5$，$\alpha_2=0.3$，$\alpha_3=0.2$，$T_{\max}$ 为最大容忍等待时间。
 
 由于未来状态依赖于当前调度决策且作业到达随机，精确在线优化极为困难。因此，本文设计一种启发式算法，在每个时刻仅调度至多一个作业，以贪心方式逼近上述目标。
 
