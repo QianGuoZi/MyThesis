@@ -1,4 +1,4 @@
-\chapter{基于深度强化学习的联合任务调度算法}
+\chapter{基于DRL的单作业资源联合任务调度算法}
 本章针对协同边缘计算中计算与网络资源联合调度的多目标优化问题，提出基于深度强化学习的求解方案CES-PPO。首先对问题进行了建模，定义负载均衡度与带宽满足度两个核心目标及内在权衡。其次将调度问题转化为马尔可夫决策过程，设计状态、动作空间与分层奖励函数。提出基于近端策略优化的双分支策略网络的算法CES-PPO，实现任务映射与带宽分配的协同决策，并引入动作掩码、启发式奖励等机制提升学习效率。通过仿真与真实环境实验，验证算法在综合性能上优于对比方法，消融实验证实启发式奖励的关键作用。
 \section{问题建模}
 本文为系统接收到的每个作业调度制定了一个联合调度问题，单作业调度的目标是通过决定在哪个物理节点分配作业的每个任务，以及任务间数据传输引起的每个数据流的带宽分配，在尽可能满足带宽需求的情况下使得系统更加负载均衡。调度器维护两个作业队列：
@@ -7,11 +7,10 @@
     \item 等待调度的作业队列，记为$\mathcal{Q}_{\text{wait}}$。
 \end{itemize}
 在线调度算法对$\mathcal{Q}_{\text{wait}}$中的作业进行逐个调度，完成调度的作业放入队列$\mathcal{Q}_{\text{run}}$进行执行。
-\subsection{边缘环境}
-边缘环境包含物理节点集$\mathcal{P}$与物理链路集$\mathcal{R}$。一个边缘环境包含多个物理节点和多条物理链路。每个物理节点$p \in \mathcal{P}$有固定的CPU资源$C_p^{\text{CPU}}$和内存资源$R_p^{\text{RAM}}$。连接两个物理节点$p_i$和$p_j$的物理链路集合记为$\mathcal{R}_{p_i}^{p_j}=\{r_a,r_b,\dots\}$。每条物理链路$r \in \mathcal{R}$是有向的，且有固定的带宽资源$\text{BW}_r^{\text{total}}$。
+\subsection{边缘环境及作业模型}
+\textbf{边缘环境}：包含物理节点集$\mathcal{P}$与物理链路集$\mathcal{R}$。一个边缘环境包含多个物理节点和多条物理链路。每个物理节点$p \in \mathcal{P}$有固定的CPU资源$C_p^{\text{CPU}}$和内存资源$R_p^{\text{RAM}}$。连接两个物理节点$p_i$和$p_j$的物理链路集合记为$\mathcal{R}_{p_i}^{p_j}=\{r_a,r_b,\dots\}$。每条物理链路$r \in \mathcal{R}$是有向的，且有固定的带宽资源$\text{BW}_r^{\text{total}}$。
 
-\subsection{作业}
-对于当前待调度作业，其任务节点集合记为$\mathcal{N}$，任务链路集合记为$\mathcal{V}$。一个作业中包含多个任务节点和多条任务链路。每个任务节点$n \in \mathcal{N}$有所需的CPU资源$\text{CPU}^\mathcal{N}(n)$和内存资源$\text{RAM}^\mathcal{N}(n)$。任务网络建模成P2P网络，相连的两个任务节点$n_i$和$n_j$之间仅存在一条链路，记为$\mathcal{V}_{n_i}^{n_j}=v$。每条链路$v \in \mathcal{V}$是有向的，其所需的带宽资源是弹性的，最小带宽为$\text{BW}_v^{\min}$，最大带宽为$\text{BW}_v^{\max}$，动态分配变量$\text{BW}_v^{\text{alloc}}$表示实际分配的带宽，且$\text{BW}_v^{\min} \leq \text{BW}_v^{\text{alloc}} \leq \text{BW}_v^{\max}$。当两个任务节点映射到同一个物理节点时，他们之间的链路将不再消耗物理带宽资源，即可以最大地满足用户的带宽请求。带宽分配变量$\text{BW}_v^{\text{alloc}}$由调度器动态决策，在满足$\text{BW}_v^{\min} \leq \text{BW}_v^{\text{alloc}} \leq \text{BW}_v^{\max}$前提下优化全局目标。
+\textbf{作业模型}：对于当前待调度作业，其任务节点集合记为$\mathcal{N}$，任务链路集合记为$\mathcal{V}$。一个作业中包含多个任务节点和多条任务链路。每个任务节点$n \in \mathcal{N}$有所需的CPU资源$\text{CPU}^\mathcal{N}(n)$和内存资源$\text{RAM}^\mathcal{N}(n)$。任务网络建模成P2P网络，相连的两个任务节点$n_i$和$n_j$之间仅存在一条链路，记为$\mathcal{V}_{n_i}^{n_j}=v$。每条链路$v \in \mathcal{V}$是有向的，其所需的带宽资源是弹性的，最小带宽为$\text{BW}_v^{\min}$，最大带宽为$\text{BW}_v^{\max}$，动态分配变量$\text{BW}_v^{\text{alloc}}$表示实际分配的带宽，且$\text{BW}_v^{\min} \leq \text{BW}_v^{\text{alloc}} \leq \text{BW}_v^{\max}$。当两个任务节点映射到同一个物理节点时，他们之间的链路将不再消耗物理带宽资源，即可以最大地满足用户的带宽请求。带宽分配变量$\text{BW}_v^{\text{alloc}}$由调度器动态决策，在满足$\text{BW}_v^{\min} \leq \text{BW}_v^{\text{alloc}} \leq \text{BW}_v^{\max}$前提下优化全局目标。
 
 \subsection{任务映射与带宽分配的关系与条件}
 联合调度问题是在遵循特定约束条件的情况下，将作业的任务节点映射到物理节点上，并且为作业中的每一条任务网络边分配带宽。
@@ -177,7 +176,7 @@ R_{\text{total}} = R_{\text{step}} + \lambda_{\text{heuristic}} \cdot R_{\text{h
     \caption{\label{network_architecture}双分支策略网络架构}
 \end{figure}
 
-\subsection{整体算法框架}
+\subsection{整体调度流程及双分支网络设计}
 本文提出的基于PPO的联合资源调度算法核心是通过深度强化学习实现计算资源与网络资源的协同调度，将传统NP难的组合优化问题转化为序列决策过程。算法\ref{alg:overall}展示了整体调度流程。
 \begin{algorithm}
     \caption{基于PPO的联合资源调度算法}
@@ -214,8 +213,6 @@ R_{\text{total}} = R_{\text{step}} + \lambda_{\text{heuristic}} \cdot R_{\text{h
     \end{algorithmic}
 \end{algorithm}
 
-\subsection{双分支策略网络架构设计}
-\label{subsec:network-architecture}
 为有效处理本问题中混合（离散映射与连续分配）且分阶段的复杂决策过程，本文设计了一种双分支策略网络架构，其结构如图\ref{network_architecture}所示。该网络的核心设计理念是“共享表征、分头决策”，通过一个共享的编码器提取状态的高层特征，随后由两个独立的策略头分别负责节点映射与带宽分配的决策生成。这种设计兼顾了两种决策间的关联性学习与各自动作空间的特殊性。
 
 \textbf{编码器模块}：作为网络的公共特征提取器，编码器$\phi(\cdot)$接收并融合来自物理环境、作业及决策过程的多维异构状态信息$s$。它通过多层感知机将高维原始状态映射为一个紧凑且信息丰富的隐藏表示$h$，该过程可表示为：
@@ -255,7 +252,7 @@ V(s) = W_{val} \cdot \text{ReLU}(W_{val_hidden} \cdot h + b_{val_hidden}) + b_{v
 \subsubsection{启发式奖励设计}
 启发式奖励$R_{\text{heuristic}}$旨在将领域知识编码为可学习的梯度信号，通过更精细化的引导加速智能体对关键调度目标的掌握。该奖励根据决策阶段动态计算，分为节点映射与带宽分配两个部分。
 
-\textbf{任务节点映射阶段}：当为任务节点$n$选择物理节点$p$时，启发式奖励$R_{\text{heuristic}}^{\text{map}}$从负载均衡、资源匹配与拓扑优化三个维度提供引导，其计算方式为：
+\textbf{（1）任务节点映射阶段}：当为任务节点$n$选择物理节点$p$时，启发式奖励$R_{\text{heuristic}}^{\text{map}}$从负载均衡、资源匹配与拓扑优化三个维度提供引导，其计算方式为：
 \begin{equation}
 R_{\text{heuristic}}^{\text{map}} = \eta_1 \cdot R_{\text{load}} + \eta_2 \cdot R_{\text{affinity}} + \eta_3 \cdot R_{\text{topo}},
 \end{equation}
@@ -266,7 +263,7 @@ R_{\text{heuristic}}^{\text{map}} = \eta_1 \cdot R_{\text{load}} + \eta_2 \cdot 
     \item \textbf{拓扑优化奖励} $R_{\text{topo}}$：针对已存在高带宽需求链路的任务对，鼓励将其映射到相同或邻近节点，从而减少后续带宽分配阶段对物理链路资源的消耗。
 \end{itemize}
 
-\textbf{带宽分配阶段}：当为任务链路$v$分配带宽等级时，启发式奖励$R_{\text{heuristic}}^{\text{bw}}$侧重于带宽资源的优化配置，其计算方式为：
+\textbf{（2）带宽分配阶段}：当为任务链路$v$分配带宽等级时，启发式奖励$R_{\text{heuristic}}^{\text{bw}}$侧重于带宽资源的优化配置，其计算方式为：
 \begin{equation}
 R_{\text{heuristic}}^{\text{bw}} = \eta_4 \cdot R_{\text{importance}} + \eta_5 \cdot R_{\text{compete}},
 \end{equation}
@@ -285,31 +282,26 @@ R_{\text{final}} = \gamma_1 \cdot L_{\text{balance}} + \gamma_2 \cdot D_{\text{B
 其中，$L_{\text{balance}}$为负载均衡度，$D_{\text{BW}}$为带宽满足度，$U_{\text{avg}}$为平均资源利用率。
 
 \subsection{训练优化策略}
-为提升算法训练效率并确保最终策略的质量，本文设计了多项训练优化策略，包括自适应权重调度、课程学习机制和温度调度策略。
+\begin{enumerate}[topsep = 0 pt, itemsep= 0 pt, parsep=0pt, partopsep=0pt, leftmargin=0pt, itemindent=44pt, labelsep=6pt, listparindent=24pt, label=(\arabic*)]
+    \item \textbf{自适应权重调度}:在奖励函数设计中，启发式奖励的权重$\lambda_{\text{heuristic}}$并非固定不变，而是采用线性衰减策略进行动态调整。具体而言，在训练初期设定较高的初始权重$\lambda_{\text{initial}}$，以强化领域知识的引导作用，帮助智能体快速建立有效的决策模式；随着训练步数$t$的增加，权重逐渐线性下降，直至达到预设的最终权重$\lambda_{\text{final}}$。这一过程使得智能体在训练后期能够减少对启发式规则的依赖，更多地依据环境反馈进行自主探索与优化，从而在引导学习与自主探索之间取得良好平衡。
+    \item \textbf{PPO优化目标与优势估计}:本文采用近端策略优化（PPO）算法的裁剪目标函数来更新策略网络参数。PPO通过限制每次策略更新的幅度来确保训练稳定性，其核心优化目标函数为：
+    \begin{equation}
+    L^{CLIP}(\theta) = \mathbb{E}_t[\min(r_t(\theta)\hat{A}_t, \text{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon)\hat{A}_t)],
+    \end{equation}
+    其中，$r_t(\theta) = \frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{\text{old}}}(a_t|s_t)}$为新旧策略的概率比，$\hat{A}_t$为优势函数估计，$\epsilon=0.2$为裁剪参数。该目标函数通过裁剪机制限制概率比$r_t(\theta)$在区间$[1-\epsilon, 1+\epsilon]$内，防止因策略更新步幅过大而导致性能震荡，从而在保证学习效率的同时维持训练稳定性。
 
-\subsubsection{自适应权重调度}
-在奖励函数设计中，启发式奖励的权重$\lambda_{\text{heuristic}}$并非固定不变，而是采用线性衰减策略进行动态调整。具体而言，在训练初期设定较高的初始权重$\lambda_{\text{initial}}$，以强化领域知识的引导作用，帮助智能体快速建立有效的决策模式；随着训练步数$t$的增加，权重逐渐线性下降，直至达到预设的最终权重$\lambda_{\text{final}}$。这一过程使得智能体在训练后期能够减少对启发式规则的依赖，更多地依据环境反馈进行自主探索与优化，从而在引导学习与自主探索之间取得良好平衡。
-
-\subsubsection{PPO优化目标与优势估计}
-本文采用近端策略优化（PPO）算法的裁剪目标函数来更新策略网络参数。PPO通过限制每次策略更新的幅度来确保训练稳定性，其核心优化目标函数为：
-\begin{equation}
-L^{CLIP}(\theta) = \mathbb{E}_t[\min(r_t(\theta)\hat{A}_t, \text{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon)\hat{A}_t)],
-\end{equation}
-其中，$r_t(\theta) = \frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{\text{old}}}(a_t|s_t)}$为新旧策略的概率比，$\hat{A}_t$为优势函数估计，$\epsilon=0.2$为裁剪参数。该目标函数通过裁剪机制限制概率比$r_t(\theta)$在区间$[1-\epsilon, 1+\epsilon]$内，防止因策略更新步幅过大而导致性能震荡，从而在保证学习效率的同时维持训练稳定性。
-
-为了准确评估动作的长期价值，算法采用广义优势估计（GAE）计算优势函数$\hat{A}_t$：
-\begin{align}
-\hat{A}_t &= \sum_{l=0}^{\infty} (\gamma\lambda)^l \delta_{t+l}, \\
-\delta_t &= r_t + \gamma V(s_{t+1}) - V(s_t),
-\end{align}
-其中，$\delta_t$为时序差分误差，$\gamma$为折扣因子，$\lambda=0.95$为权衡参数。GAE通过指数加权多步时序差分误差，在偏差与方差之间取得平衡，为策略梯度提供了低方差、低偏差的优势估计，从而引导策略向更高长期回报的方向更新。
+    为了准确评估动作的长期价值，算法采用广义优势估计（GAE）计算优势函数$\hat{A}_t$：
+    \begin{align}
+    \hat{A}_t &= \sum_{l=0}^{\infty} (\gamma\lambda)^l \delta_{t+l}, \\
+    \delta_t &= r_t + \gamma V(s_{t+1}) - V(s_t),
+    \end{align}
+    其中，$\delta_t$为时序差分误差，$\gamma$为折扣因子，$\lambda=0.95$为权衡参数。GAE通过指数加权多步时序差分误差，在偏差与方差之间取得平衡，为策略梯度提供了低方差、低偏差的优势估计，从而引导策略向更高长期回报的方向更新。
+\end{enumerate}
 
 \subsection{算法复杂度分析}
 本节从时间和空间两个维度分析所提出算法的计算复杂度。时间复杂度方面，训练阶段的前向传播和反向传播复杂度分别为$O(d_{\text{state}} \times d_{\text{hidden}} + d_{\text{hidden}}^2)$和$O(B \times d_{\text{hidden}}^2)$，其中$B$为批次大小；推理阶段的单次决策复杂度为$O(d_{\text{state}} \times d_{\text{hidden}})$，完成一个作业的完整调度复杂度为$O((|N|+|V|) \times d_{\text{state}} \times d_{\text{hidden}})$，可实现毫秒级实时决策。空间复杂度主要包括模型参数存储$O(d_{\text{state}} \times d_{\text{hidden}} + d_{\text{hidden}}^2)$以及训练时的经验缓冲区$O(B \times T_{\max} \times d_{\text{state}})$。尽管训练阶段需要较多计算资源，但推理阶段的高效性使得本算法在实际部署中相比传统启发式算法具有显著优势。
 
 \section{实验结果与分析}
-本节通过仿真实验与真实环境场景实验，对CES-PPO算法进行验证。
-
 \subsection{对比方法}
 为全面评估本文提出的算法性能，本文选取以下4种对比算法：
 \begin{itemize}
