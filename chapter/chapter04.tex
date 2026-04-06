@@ -1,5 +1,5 @@
 \chapter{基于DRL的单作业资源联合任务调度算法}
-针对协同边缘计算中计算与网络资源联合调度的多目标优化问题，本章提出了基于深度强化学习的求解方案CES-PPO。首先，本章对问题进行了建模，定义负载均衡度与带宽满足度两个核心目标及内在权衡。其次，将调度问题转化为马尔可夫决策过程，设计状态、动作空间与分层奖励函数。然后，提出了基于近端策略优化的双分支策略网络的算法CES-PPO，实现任务映射与带宽分配的协同决策，并引入动作掩码、启发式奖励等机制提升学习效率。最终，通过仿真与真实环境实验，验证算法在综合性能上优于对比方法，消融实验证实启发式奖励的关键作用。
+针对协同边缘计算中计算与网络资源联合调度的多目标优化问题，本章提出了基于深度强化学习的求解方案CES-PPO。首先，本章对问题进行了建模，定义负载均衡度与带宽满足度两个核心目标及内在权衡。其次，将调度问题转化为马尔可夫决策过程，设计了状态、动作空间与分层奖励函数。然后，提出了基于近端策略优化的双分支策略网络的算法CES-PPO，实现任务映射与带宽分配的协同决策，并引入动作掩码、启发式奖励等机制提升学习效率。最终，通过仿真与真实环境实验，验证了算法在综合性能上优于对比方法，消融实验证实了启发式奖励的关键作用。
 \section{问题建模}
 本文为系统接收到的每个作业调度制定了一个联合调度问题，单作业调度的目标是通过决定在哪个物理节点分配作业的每个任务，以及任务间数据传输引起的每个数据流的带宽分配，在尽可能满足带宽需求的情况下使得系统更加负载均衡。调度器维护两个作业队列：
 \begin{itemize}
@@ -66,7 +66,7 @@
 \quad \forall p \in \mathcal{P}, \rho_p^{\text{RAM}} = \frac{\sum\limits_{n \in \mathcal{N}} \left( X_p^{n} \cdot \text{RAM}^\mathcal{N}(n) \right)}{R_p^{\text{RAM}}}, 
 \end{equation}
 \begin{equation}
-\quad \forall r \in \mathcal{R}, \rho_r^{\text{BW}} = \frac{\sum\limits_{v \in \mathcal{V}} \left( Y_r^v \cdot \text{BW}_v^{\text{alloc}} \right)}{\text{BW}_r^{\text{total}}}, 
+\quad \forall r \in \mathcal{R}, \rho_r^{\text{BW}} = \frac{\sum\limits_{v \in \mathcal{V}} \left( Y_r^v \cdot \text{BW}_v^{\text{alloc}} \right)}{\text{BW}_r^{\text{total}}}. 
 \end{equation}
 对应的平均利用率为：
 \begin{equation}
@@ -76,7 +76,7 @@
 \bar{\rho}^{\text{RAM}} = \frac{1}{|\mathcal{P}|} \sum_{p \in \mathcal{P}} \rho_p^{\text{RAM}},
 \end{equation}
 \begin{equation}
-\bar{\rho}^{\text{BW}} = \frac{1}{|\mathcal{R}|} \sum_{r \in \mathcal{R}} \rho_r^{\text{BW}},
+\bar{\rho}^{\text{BW}} = \frac{1}{|\mathcal{R}|} \sum_{r \in \mathcal{R}} \rho_r^{\text{BW}}.
 \end{equation}
 最终，负载均衡度通过三个维度的标准差加权和来综合衡量：
 \begin{equation}
@@ -86,7 +86,7 @@ L^{\text{CPU}} = \sqrt{\frac{1}{|\mathcal{P}|} \sum_{p \in \mathcal{P}} (\rho_p^
 L^{\text{RAM}} = \sqrt{\frac{1}{|\mathcal{P}|} \sum_{p \in \mathcal{P}} (\rho_p^{\text{RAM}} - \bar{\rho}^{\text{RAM}})^2},
 \end{equation}
 \begin{equation}
-L^{\text{BW}} = \sqrt{\frac{1}{|\mathcal{R}|} \sum_{r \in \mathcal{R}} (\rho_r^{\text{BW}} - \bar{\rho}^{\text{BW}})^2},
+L^{\text{BW}} = \sqrt{\frac{1}{|\mathcal{R}|} \sum_{r \in \mathcal{R}} (\rho_r^{\text{BW}} - \bar{\rho}^{\text{BW}})^2}.
 \end{equation}
 系统的整体负载均衡度定义为：
 \begin{equation}
@@ -106,7 +106,7 @@ L = w_1 L^{\text{CPU}} + w_2 L^{\text{RAM}} + w_3 L^{\text{BW}},
 \begin{cases}
 1, & \text{若 } \text{BW}_v^{\max} = \text{BW}_v^{\min} \\
 \frac{\text{BW}_v^{\text{alloc}} - \text{BW}_v^{\min}}{\text{BW}_v^{\max} - \text{BW}_v^{\min}}, & \text{其他}
-\end{cases},
+\end{cases}.
 \end{equation}
 整个作业的带宽需求满足度则为所有任务链路满足度的平均值：
 \begin{equation}
@@ -117,12 +117,12 @@ D_{\text{BW}} = \frac{1}{|\mathcal{V}|} \sum_{v \in \mathcal{V}} \delta(v),
 \subsubsection{多目标权衡关系}
 这两个优化目标之间存在内在的权衡关系。当多个任务节点被映射到同一物理节点时，它们之间的任务链路将不再消耗物理带宽资源，这可以显著提高带宽需求满足度。然而，这种做法同时会加剧该物理节点上计算资源的负载集中度，从而降低负载均衡指标。反之，将任务节点分散部署到不同物理节点虽有利于负载均衡，却可能因任务链路跨越物理链路而消耗带宽资源，降低带宽需求满足度。
 
-因此，联合调度问题的本质是在满足系统所有硬资源约束的前提下，在这两个竞争性目标之间寻找帕累托最优解集，即在满足系统资源约束的前提下，寻求负载均衡度$L$与带宽需求满足度$D_{\text{BW}}$的最佳权衡。该问题可形式化为如下多目标优化问题：
+因此，联合调度问题的本质是在满足系统所有硬资源约束的前提下，在这两个竞争性目标之间寻找帕累托最优解集，即在满足系统资源约束的前提下，寻求负载均衡度$L$与带宽需求满足度$D_{\text{BW}}$的最佳权衡。综上，协同边缘计算下的单作业资源联合调度问题，可形式化为如下带硬约束的多目标优化问题：
 \begin{equation}
 \begin{aligned}
 & \text{Minimize} && L, \\
 & \text{Maximize} && D_{\text{BW}}, \\
-& \text{s.t.} && \text{约束条件 (4-1)-(4-7)}
+& \text{s.t.} && \text{约束条件 (4-1)-(4-7)}.
 \end{aligned}
 \end{equation}
 后续的调度算法设计将围绕如何有效求解这一多目标优化问题展开。

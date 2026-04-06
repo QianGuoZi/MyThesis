@@ -433,7 +433,7 @@
 \renewcommand{\maketitle}{% called outside
   \ifpdfcover
     %%coverpage from pdf file
-    \includepdf[pages={1-5,{},7-8}]{cover_file/thesis_cover.pdf}
+    \includepdf[pages={1}]{cover_file/thesis_cover.pdf}
   \else
     %%buildin coverpage
     \begin{titlepage}
