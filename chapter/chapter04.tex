@@ -8,6 +8,8 @@
 \end{itemize}
 针对作业动态到达的场景，在线调度算法对$\mathcal{Q}_{\text{wait}}$中的作业进行逐个调度，完成调度的作业放入队列$\mathcal{Q}_{\text{run}}$进行执行。
 \subsection{边缘环境及作业模型}
+本文研究的调度问题基于以下前提：对于每个待调度作业，用户在提交时可提供其内部的任务节点集合及通信拓扑（即哪些任务节点之间存在需要同步的数据流），以及每条通信链路的带宽需求（以最小-最大区间形式给出）。
+
 \textbf{边缘环境}：包含物理节点集$\mathcal{P}$与物理链路集$\mathcal{R}$。一个边缘环境包含多个物理节点和多条物理链路。每个物理节点$p \in \mathcal{P}$有固定的CPU资源$C_p^{\text{CPU}}$和内存资源$R_p^{\text{RAM}}$。连接两个物理节点$p_i$和$p_j$的物理链路集合记为$\mathcal{R}_{p_i}^{p_j}=\{r_a,r_b,\dots\}$。每条物理链路$r \in \mathcal{R}$是有向的，且有固定的带宽资源$\text{BW}_r^{\text{total}}$。
 
 \textbf{作业模型}：对于当前待调度作业，其任务节点集合记为$\mathcal{N}$，任务链路集合记为$\mathcal{V}$。一个作业中包含多个任务节点和多条任务链路。每个任务节点$n \in \mathcal{N}$有所需的CPU资源$\text{CPU}^\mathcal{N}(n)$和内存资源$\text{RAM}^\mathcal{N}(n)$。任务网络建模成P2P网络，相连的两个任务节点$n_i$和$n_j$之间仅存在一条链路，记为$\mathcal{V}_{n_i}^{n_j}=v$。每条链路$v \in \mathcal{V}$是有向的，其所需的带宽资源是弹性的，最小带宽为$\text{BW}_v^{\min}$，最大带宽为$\text{BW}_v^{\max}$，动态分配变量$\text{BW}_v^{\text{alloc}}$表示实际分配的带宽，且$\text{BW}_v^{\min} \leq \text{BW}_v^{\text{alloc}} \leq \text{BW}_v^{\max}$。当两个任务节点映射到同一个物理节点时，他们之间的链路将不再消耗物理带宽资源，即可以最大地满足用户的带宽请求。带宽分配变量$\text{BW}_v^{\text{alloc}}$由调度器动态决策，在满足$\text{BW}_v^{\min} \leq \text{BW}_v^{\text{alloc}} \leq \text{BW}_v^{\max}$前提下优化全局目标。
@@ -338,7 +340,7 @@ R_{\text{final}} = \gamma_1 \cdot L_{\text{balance}} + \gamma_2 \cdot D_{\text{B
 
 \subsection{真实环境实验}
 \subsubsection{真实环境实验设置}
-在真实部署实验中，本文以协作训练Fashion-MNIST图像分类模型为目标，采用了 Gossip Learning、Ring All-Reduce 与 E-Tree Learning 三种不同通信架构的分布式学习任务；硬件方面，实验由一个配备 AMD Ryzen Threadripper 3990X 64核处理器的Master服务器以及10台通过有线千兆局域网全连接的异构Jetson设备（包括4台 Nano 与 6台 Xavier NX）组成，并使用Tailscale进行组网；作业则被设置为固定包含5个任务节点，其资源请求与仿真环境一致，任务节点间的连接拓扑根据所采用的训练架构随机生成。负载以 Docker 容器（stress:latest）形式运行在边缘节点上，用于模拟后台计算与网络负载。
+在真实部署实验中，本文以协作训练Fashion-MNIST图像分类模型为目标，采用了 Gossip Learning、Ring All-Reduce 与 E-Tree Learning 三种不同通信架构的分布式学习任务；硬件方面，实验由一个配备 AMD Ryzen Threadripper 3990X 64核处理器的Master服务器以及10台通过有线千兆局域网全连接的异构Jetson设备（包括4台4核的NVIDIA Jetson Nano与6台6核的NVIDIA Jetson Xavier NX）组成，并使用Tailscale进行组网；作业则被设置为固定包含5个任务节点，其资源请求与仿真环境一致，任务节点间的连接拓扑根据所采用的训练架构随机生成。负载以 Docker 容器（stress:latest）形式运行在边缘节点上，用于模拟后台计算与网络负载。
 
 \subsubsection{实验分析}
 \begin{figure}[htbp]
