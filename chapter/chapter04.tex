@@ -102,7 +102,7 @@ L = w_1 L^{\text{CPU}} + w_2 L^{\text{RAM}} + w_3 L^{\text{BW}},
 \subsubsection{带宽需求满足度}
 带宽需求满足度用于评估调度方案对作业中任务链路服务质量（QoS）的满足程度。在资源允许的条件下，调度器应尽可能为任务链路分配接近其最大需求$\text{BW}_v^{\max}$的带宽，以提供更优的网络性能。该指标反映了系统中所有任务链路的带宽需求得到满足的平均程度，其值越高代表链路服务质量越好。
 
-对于每条任务链路$v \in \mathcal{V}_j$，其带宽需求满足度定义为：
+对于每条任务链路$v \in \mathcal{V}$，其带宽需求满足度定义为：
 \begin{equation}
 \delta(v) =
 \begin{cases}
@@ -241,7 +241,7 @@ h = \text{ReLU}(W_2 \cdot \text{ReLU}(W_1 \cdot s + b_1) + b_2),
 
 \textbf{价值网络}：在演员-评论家框架中，价值网络用于评估当前状态$s$的长期期望回报，为策略更新提供基线（Baseline），以降低梯度估计的方差并加速训练。本算法中的价值网络与策略网络共享编码器，同样以隐藏表示$h$作为输入，通过一个独立的回归头预测状态价值$V(s)$：
 \begin{equation}
-V(s) = W_{val} \cdot \text{ReLU}(W_{val_hidden} \cdot h + b_{val_hidden}) + b_{val},
+V(s) = W_{val} \cdot \text{ReLU}(W_{val_{hidden}} \cdot h + b_{val_{hidden}}) + b_{val},
 \end{equation}
 共享编码器的设计使得价值估计能够建立在与策略决策相同的特征理解之上，提高了价值预测的准确性和与策略学习的一致性。
 
