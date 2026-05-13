@@ -340,7 +340,7 @@ R_{\text{final}} = \gamma_1 \cdot L_{\text{balance}} + \gamma_2 \cdot D_{\text{B
 
 \subsection{真实环境实验}
 \subsubsection{真实环境实验设置}
-在真实部署实验中，本文以协作训练Fashion-MNIST图像分类模型为目标，采用了 Gossip Learning、Ring All-Reduce 与 E-Tree Learning 三种不同通信架构的分布式学习任务；硬件方面，实验由一个配备 AMD Ryzen Threadripper 3990X 64核处理器的Master服务器以及10台通过有线千兆局域网全连接的异构Jetson设备（包括4台4核的NVIDIA Jetson Nano与6台6核的NVIDIA Jetson Xavier NX）组成，并使用Tailscale进行组网；作业则被设置为固定包含5个任务节点，其资源请求与仿真环境一致，任务节点间的连接拓扑根据所采用的训练架构随机生成。负载以 Docker 容器（stress:latest）形式运行在边缘节点上，用于模拟后台计算与网络负载。
+在真实部署实验中，本文以协作训练Fashion-MNIST图像分类模型为目标，采用了 Gossip Learning、Ring All-Reduce 与 E-Tree Learning 三种不同通信架构的分布式学习任务；硬件方面，实验由一个配备 AMD Ryzen Threadripper 3990X 64核处理器的Master服务器以及10台通过有线千兆局域网全连接的异构Jetson设备（包括4台4核的NVIDIA Jetson Nano与6台6核的NVIDIA Jetson Xavier NX）组成，并使用Tailscale进行组网；作业则被设置为固定包含5个任务节点，其资源请求与仿真环境一致，任务节点间的连接拓扑根据所采用的训练架构随机生成。负载以 Docker 容器（stress:latest）形式运行在边缘节点上，用于模拟后台计算与网络负载，具体的负载大小参考仿真环境的设置随机生成。
 
 \subsubsection{实验分析}
 \begin{figure}[htbp]
